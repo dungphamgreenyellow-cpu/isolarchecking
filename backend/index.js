@@ -1,21 +1,30 @@
-const uploadRoutes = require('./routes/upload');
-const analysisRoutes = require('./routes/analysis');
-// === iSolarChecking Cloud Compute — v2.2-LTS ===
-// ✅ Accepts up to 50 MB uploads
-// ✅ Fixed CORS for *.app.github.dev + localhost
-// ✅ Works with express-fileupload (preferred)
-// ✅ Compatible with Codespaces and Render
+// === iSolarChecking Cloud Compute — v9.4-LTS ===
+// ✅ 50MB uploads
+// ✅ Render + Codespaces friendly
+// ✅ Fully ESM
 
 import express from "express";
 import cors from "cors";
 import fileUpload from "express-fileupload";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Compute logic (giữ nguyên baseline của bạn)
 import { checkFusionSolarPeriod } from "./compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
+
+// Extra routes (ESM)
+import uploadRoutes from "./routes/upload.js";
+import analysisRoutes from "./routes/analysis.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// === 1. Allow large uploads (50 MB) ===
+// __dirname cho ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// === 1) Upload middleware (50MB)
 app.use(
   fileUpload({
     limits: { fileSize: 50 * 1024 * 1024 },
@@ -23,40 +32,37 @@ app.use(
   })
 );
 
-// === 2. Safe CORS config ===
+// === 2) CORS an toàn cho localhost & *.app.github.dev
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin, cb) => {
       if (!origin || origin.includes("localhost") || /\.app\.github\.dev$/.test(origin)) {
-        callback(null, true);
+        cb(null, true);
       } else {
         console.warn("❌ Blocked CORS:", origin);
-        callback(new Error("Not allowed by CORS"));
+        cb(new Error("Not allowed by CORS"));
       }
     },
   })
 );
 
-// === 3. JSON parsers ===
+// === 3) JSON parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// === 4. Root check ===
-app.get("/", (req, res) => {
+// === 4) Health
+app.get("/", (_req, res) => {
   res.send("✅ iSolarChecking backend cloud compute is running fine!");
 });
 
-// === 5. Parse FusionSolar ===
+// === 5) Parse FusionSolar — giữ đúng logic bạn đang chạy
 app.post("/api/parse-fusion", async (req, res) => {
   try {
-    if (!req.files || !req.files.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-    const f = req.files.file;
-    console.log(`📥 Received FusionSolar file: ${f.name}, size: ${f.size} bytes`);
+    if (!req.files?.file) return res.status(400).json({ error: "No file uploaded" });
 
+    const f = req.files.file;
+    console.log(`📥 Received FusionSolar: ${f.name} (${f.size} bytes)`);
     const parsed = await checkFusionSolarPeriod(f);
-    console.log("✅ Parsed:", parsed.message);
 
     res.json({
       success: true,
@@ -71,8 +77,8 @@ app.post("/api/parse-fusion", async (req, res) => {
   }
 });
 
-// === 6. Compute RPR ===
-app.post("/api/compute-rpr", async (req, res) => {
+// === 6) Compute RPR — giữ input như bạn mô tả
+app.post("/api/compute-rpr", (req, res) => {
   try {
     const { parsed, dailyGHI, capacity } = req.body;
     if (!parsed || !capacity) return res.status(400).json({ error: "Missing input data" });
@@ -85,15 +91,16 @@ app.post("/api/compute-rpr", async (req, res) => {
   }
 });
 
-// === 7. Start server ===
+// === 7) Extra routes (nếu FE đang gọi /api/upload hoặc /api/analysis)
+app.use("/api", uploadRoutes);
+app.use("/api", analysisRoutes);
+
+// === 8) Serve frontend build (nếu đã build vào backend/public)
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir));
+app.get("*", (_req, res) => res.sendFile(path.join(publicDir, "index.html")));
+
+// === 9) Start
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`☀️ Cloud Compute API running at http://localhost:${PORT}`);
 });
-
-const path = require('path');
-const publicDir = path.join(__dirname, 'public');
-app.use(express.static(publicDir));
-app.get('*', (req,res)=>res.sendFile(path.join(publicDir,'index.html')));
-
-app.use('/api', uploadRoutes);
-app.use('/api', analysisRoutes);
