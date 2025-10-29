@@ -1,0 +1,1 @@
+let _id=null; export const setSessionId=v=>_id=v; export const getSessionId=()=>_id;

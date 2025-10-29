@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: isolarchecking-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run build:frontend && npm prune --production
+    startCommand: npm start
+    autoDeploy: false
