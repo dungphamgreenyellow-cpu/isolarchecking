@@ -2,7 +2,7 @@
   "name": "isolarchecking-backend",
   "version": "4.0.0",
   "main": "index.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js",
     "start:dev": "nodemon index.js",
