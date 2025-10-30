@@ -6,11 +6,11 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  timeout: 120000, // 2 minutes
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 120000,
 });
 
-console.log("🌐 [cloudApi] Backend URL:", import.meta.env.VITE_API_URL);
+console.log("🌐 [cloudApi] Backend URL:", import.meta.env.VITE_API_BASE_URL);
 
 export async function analyzeOnCloud({ logFile, irrFile, pvsystFile, extras = {} }) {
   if (!logFile) throw new Error("Missing required logFile");
