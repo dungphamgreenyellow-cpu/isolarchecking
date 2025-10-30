@@ -1,8 +1,3 @@
-// === src/utils/cloudApi.js — iSolarChecking Cloud Compute v1.3 ===
-// ✅ Match backend field name ("file")
-// ✅ Compatible with /api/parse-fusion
-// ✅ Uses axios + FormData with correct headers
-
 import axios from "axios";
 
 const api = axios.create({
@@ -16,7 +11,7 @@ export async function analyzeOnCloud({ logFile, irrFile, pvsystFile, extras = {}
   if (!logFile) throw new Error("Missing required logFile");
 
   const fd = new FormData();
-  fd.append("file", logFile); // ✅ backend expects "file"
+  fd.append("file", logFile);
   if (irrFile) fd.append("irrFile", irrFile);
   if (pvsystFile) fd.append("pvsystFile", pvsystFile);
   Object.entries(extras).forEach(([k, v]) => fd.append(k, String(v)));
