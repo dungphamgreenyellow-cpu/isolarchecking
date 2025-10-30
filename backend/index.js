@@ -1,30 +1,23 @@
-// === iSolarChecking Cloud Compute — v9.4-LTS ===
-// ✅ 50MB uploads
-// ✅ Render + Codespaces friendly
-// ✅ Fully ESM
-
 import express from "express";
 import cors from "cors";
 import fileUpload from "express-fileupload";
-import path from "path";
 import { fileURLToPath } from "url";
+import path from "path";
 
-// Compute logic (giữ nguyên baseline của bạn)
-import { checkFusionSolarPeriod } from "./compute/fusionSolarParser.js";
-import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
-
-// Extra routes (ESM)
 import uploadRoutes from "./routes/upload.js";
 import analysisRoutes from "./routes/analysis.js";
+
+import { checkFusionSolarPeriod } from "./compute/fusionSolarParser.js";
+import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// __dirname cho ESM
+// ✅ Fix __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// === 1) Upload middleware (50MB)
+// === 1. Allow 50MB upload size ===
 app.use(
   fileUpload({
     limits: { fileSize: 50 * 1024 * 1024 },
@@ -32,53 +25,47 @@ app.use(
   })
 );
 
-// === 2) CORS an toàn cho localhost & *.app.github.dev
+// === 2. CORS Safe ===
 app.use(
   cors({
-    origin: (origin, cb) => {
+    origin: (origin, callback) => {
       if (!origin || origin.includes("localhost") || /\.app\.github\.dev$/.test(origin)) {
-        cb(null, true);
+        callback(null, true);
       } else {
         console.warn("❌ Blocked CORS:", origin);
-        cb(new Error("Not allowed by CORS"));
+        callback(new Error("Not allowed by CORS"));
       }
     },
   })
 );
 
-// === 3) JSON parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// === 4) Health
-app.get("/", (_req, res) => {
-  res.send("✅ iSolarChecking backend cloud compute is running fine!");
+// === Root Check ===
+app.get("/", (req, res) => {
+  res.send("✅ iSolarChecking backend cloud compute is running!");
 });
 
-// === 5) Parse FusionSolar — giữ đúng logic bạn đang chạy
+// === FusionSolar Parser ===
 app.post("/api/parse-fusion", async (req, res) => {
   try {
-    if (!req.files?.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.files || !req.files.file) return res.status(400).json({ error: "No file uploaded" });
 
     const f = req.files.file;
-    console.log(`📥 Received FusionSolar: ${f.name} (${f.size} bytes)`);
     const parsed = await checkFusionSolarPeriod(f);
 
     res.json({
       success: true,
-      totalProduction: parsed.totalProduction,
-      dailyProduction: parsed.dailyProduction,
-      availableMetrics: parsed.availableMetrics,
-      message: parsed.message,
+      ...parsed,
     });
   } catch (err) {
-    console.error("⚠️ Error parsing FusionSolar:", err);
-    res.status(500).json({ success: false, error: err.message || "Parse failed" });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// === 6) Compute RPR — giữ input như bạn mô tả
-app.post("/api/compute-rpr", (req, res) => {
+// === Compute RPR ===
+app.post("/api/compute-rpr", async (req, res) => {
   try {
     const { parsed, dailyGHI, capacity } = req.body;
     if (!parsed || !capacity) return res.status(400).json({ error: "Missing input data" });
@@ -86,21 +73,20 @@ app.post("/api/compute-rpr", (req, res) => {
     const rpr = computeRealPerformanceRatio(parsed, dailyGHI || [], capacity);
     res.json({ success: true, rpr });
   } catch (err) {
-    console.error("⚠️ Error computing RPR:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// === 7) Extra routes (nếu FE đang gọi /api/upload hoặc /api/analysis)
+// ✅ Serve frontend build (if exists)
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir));
+app.get("*", (req, res) => res.sendFile(path.join(publicDir, "index.html")));
+
+// === API Routes ===
 app.use("/api", uploadRoutes);
 app.use("/api", analysisRoutes);
 
-// === 8) Serve frontend build (nếu đã build vào backend/public)
-const publicDir = path.join(__dirname, "public");
-app.use(express.static(publicDir));
-app.get("*", (_req, res) => res.sendFile(path.join(publicDir, "index.html")));
-
-// === 9) Start
+// === Start Server ===
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`☀️ Cloud Compute API running at http://localhost:${PORT}`);
+  console.log(`☀️ Backend running → http://localhost:${PORT}`);
 });

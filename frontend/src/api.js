@@ -1,5 +1,6 @@
 // src/api.js — central API client
-const BASE = import.meta.env.VITE_API_BASE_URL || '';
+const BASE = import.meta.env.VITE_API_BASE_URL;
+console.log("[cloudApi] Backend URL:", BASE);
 export async function uploadLog(file){
   const fd = new FormData(); fd.append('logFile', file);
   const r = await fetch(`${BASE}/api/upload-log`, { method:'POST', body: fd });
