@@ -77,11 +77,6 @@ app.post("/api/compute-rpr", async (req, res) => {
   }
 });
 
-// ✅ Serve frontend build (if exists)
-const publicDir = path.join(__dirname, "public");
-app.use(express.static(publicDir));
-app.get("*", (req, res) => res.sendFile(path.join(publicDir, "index.html")));
-
 // === API Routes ===
 app.use("/api", uploadRoutes);
 app.use("/api", analysisRoutes);
