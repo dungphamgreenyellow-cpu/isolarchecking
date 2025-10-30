@@ -28,3 +28,21 @@ export async function getSummary(id){
   const r = await fetch(`${BASE}/api/analysis-summary?id=${encodeURIComponent(id)}`);
   return r.json();
 }
+export async function parseFusion(file){
+  const fd = new FormData();
+  fd.append('file', file);
+
+  const r = await fetch(`${BASE}/api/parse-fusion`, {
+    method: 'POST',
+    body: fd
+  });
+
+  // Nếu backend trả về HTML → báo lỗi rõ ràng
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("❌ Cloud parse error, raw response:", text);
+    throw new Error("Cloud Parse failed: Backend did not return JSON");
+  }
+}

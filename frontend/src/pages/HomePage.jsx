@@ -68,7 +68,7 @@ function TestBackendButton() {
   const pingCloud = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/`);
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/`);
       const text = await res.text();
       setReply("✅ " + text);
     } catch (err) {
@@ -271,7 +271,7 @@ export default function HomePage() {
                 try {
                   const fd = new FormData();
                   fd.append("file", logFile);
-                  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/parse-fusion`, {
+                  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/parse-fusion`, {
                     method: "POST",
                     body: fd,
                   });
