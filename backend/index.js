@@ -18,16 +18,16 @@ const PORT = process.env.PORT || 8080;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ✅ Allow LARGE FILE UPLOADS
+// ✅ Allow LARGE FILE UPLOADS (no size limit)
 app.use(
   fileUpload({
     useTempFiles: true,
     tempFileDir: "/tmp/",
-    limits: {}, 
+    limits: {}, // unlimited
   })
 );
 
-// ✅ CORS open
+// ✅ CORS open (frontend + cloud)
 app.use(
   cors({
     origin: "*",
@@ -50,15 +50,19 @@ app.post("/api/parse-pvsyst", async (req, res) => {
     if (!req.files || !req.files.file)
       return res.status(400).json({ error: "No PDF uploaded" });
 
-    const info = await parsePVSystPDF(req.files.file);
-    res.json({ success: true, data: info });
+    // ✅ FIX: read file as Buffer
+    const buffer = req.files.file.data;
+
+    const info = await parsePVSystPDF(buffer);
+
+    return res.json({ success: true, data: info });
   } catch (err) {
-    console.error("parse-pvsyst error:", err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("❌ parse-pvsyst error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// === FusionSolar legacy ===
+// === FusionSolar legacy quick parse ===
 app.post("/api/parse-fusion", async (req, res) => {
   try {
     if (!req.files || !req.files.file)
@@ -89,7 +93,7 @@ app.post("/api/compute-rpr", async (req, res) => {
   }
 });
 
-// === API Routes ===
+// === Attach API modules ===
 app.use("/api", uploadRoutes);
 app.use("/api", analysisRoutes);
 
