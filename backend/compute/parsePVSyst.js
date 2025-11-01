@@ -1,92 +1,103 @@
-// backend/compute/parsePVSyst.js
-// ✅ Works on Node20 + Render + ESM
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse"); // <-- this is correct for ESM
+import express from "express";
+import cors from "cors";
+import fileUpload from "express-fileupload";
+import { fileURLToPath } from "url";
+import path from "path";
 
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+import uploadRoutes from "./routes/upload.js";
+import analysisRoutes from "./routes/analysis.js";
 
-function normNum(s) {
-  if (!s) return null;
-  const t = s.replace(/\s/g, "").replace(/,/g, "");
-  const v = Number(t);
-  return Number.isFinite(v) ? v : null;
-}
+import { checkFusionSolarPeriod } from "./compute/fusionSolarParser.js";
+import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
+import { parsePVSystPDF } from "./compute/parsePVSyst.js";
 
-function findOne(text, re) {
-  const m = text.match(re);
-  return m ? (m[1] ?? m[0]) : null;
-}
+const app = express();
+const PORT = process.env.PORT || 8080;
 
-function parseMonthlyTable(text) {
-  const rows = {};
-  for (const mon of MONTHS) {
-    const re = new RegExp(
-      `\\b${mon}\\b\\s+([-\\d.,]+)(?:\\s+([-\\d.,]+))?(?:\\s+([-\\d.,]+))?(?:\\s+([-\\d.,]+))?`,
-      "i"
-    );
-    const m = text.match(re);
-    if (!m) continue;
-    const v = m.slice(1).map(normNum).filter(x => x !== null);
-    if (v.length === 0) continue;
-    rows[mon] = {
-      month: mon,
-      ghi: v[0] ?? null,
-      gti: v[1] ?? null,
-      eArray: v[2] ?? null,
-      eOut: v[3] ?? v[2] ?? null,
-    };
+// ✅ Fix __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ✅ Allow LARGE FILE UPLOADS
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+    limits: {}, // unlimited
+  })
+);
+
+// ✅ CORS Safe for cloud frontend
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+
+app.use(express.json({ limit: "200mb" }));
+app.use(express.urlencoded({ extended: true, limit: "200mb" }));
+
+// === Root Check ===
+app.get("/", (req, res) => {
+  res.send("✅ iSolarChecking backend cloud compute is running!");
+});
+
+// === Parse PVSyst PDF (FIXED) ===
+app.post("/api/parse-pvsyst", async (req, res) => {
+  try {
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: "No PDF uploaded" });
+    }
+
+    // ✅ ALWAYS use .data (Buffer) — this was the missing fix
+    const buffer = req.files.file.data;
+
+    const info = await parsePVSystPDF(buffer);
+    return res.json({ success: true, data: info });
+  } catch (err) {
+    console.error("❌ parse-pvsyst error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
+});
 
-  const monthly = MONTHS.map(m => rows[m]).filter(Boolean);
-  if (monthly.length !== 12) {
-    throw new Error("PVSyst monthly table incomplete.");
+// === FusionSolar quick Period Check ===
+app.post("/api/parse-fusion", async (req, res) => {
+  try {
+    if (!req.files || !req.files.file)
+      return res.status(400).json({ error: "No file uploaded" });
+
+    const f = req.files.file;
+    const parsed = await checkFusionSolarPeriod(f);
+
+    return res.json({ success: true, ...parsed });
+  } catch (err) {
+    console.error("parse-fusion error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
-  return monthly;
-}
+});
 
-function parseLosses(text) {
-  const losses = {};
-  const re = /([A-Za-z][A-Za-z() \/-]+)\s*[:=]?\s*([\d.,]+)\s*%/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const key = m[1].trim().replace(/\s+/g, " ");
-    const val = normNum(m[2]);
-    if (val !== null) losses[key] = val;
+// === Compute RPR ===
+app.post("/api/compute-rpr", async (req, res) => {
+  try {
+    const { parsed, dailyGHI, capacity } = req.body;
+    if (!parsed || !capacity)
+      return res.status(400).json({ error: "Missing input data" });
+
+    const rpr = computeRealPerformanceRatio(parsed, dailyGHI || [], capacity);
+    return res.json({ success: true, rpr });
+  } catch (err) {
+    console.error("compute-rpr error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
-  return losses;
-}
+});
 
-export async function parsePVSystPDF(buffer) {
-  const { text } = await pdf(buffer);
-  const clean = text.replace(/\s+/g, " ");
+// === Attach API modules ===
+app.use("/api", uploadRoutes);
+app.use("/api", analysisRoutes);
 
-  const projectName = findOne(clean, /Project\s*:\s*([A-Za-z0-9\-_ .]+)/i) || "";
-  const latitude = findOne(clean, /Latitude\s*:\s*([0-9.]+)/i);
-  const longitude = findOne(clean, /Longitude\s*:\s*([0-9.]+)/i);
-
-  const moduleModel = findOne(clean, /\b(JAM|LR|TSM|JKM|CS)[0-9A-Za-z\-\/]+\b/i) || "";
-  const inverterModel = findOne(clean, /\b(SUN2000|SG|STP|PVS)\-[A-Za-z0-9\-]+/i) || "";
-
-  const dcCapacity_kWp = normNum(findOne(clean, /([0-9.,]+)\s*kWp/i));
-  const acCapacity_kW = normNum(findOne(clean, /([0-9.,]+)\s*kWac/i));
-
-  const expectedProduction_MWh = normNum(findOne(clean, /([0-9.,]+)\s*MWh\/year/i));
-  const performanceRatio_percent = normNum(findOne(clean, /([0-9.,]+)\s*%/i));
-
-  const monthly = parseMonthlyTable(clean);
-  const losses = parseLosses(clean);
-
-  return {
-    projectName,
-    location: { latitude: latitude ? Number(latitude) : null, longitude: longitude ? Number(longitude) : null },
-    components: { moduleModel, inverterModel },
-    capacity: { dc_kWp: dcCapacity_kWp ?? null, ac_kW: acCapacity_kW ?? null },
-    budget: {
-      annualEnergy_MWh: expectedProduction_MWh ?? null,
-      PR_percent: performanceRatio_percent ?? null,
-      monthlyExpected: monthly,
-      losses,
-    },
-  };
-}
+// === Start Server ===
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`☀️ Backend running → http://localhost:${PORT}`);
+});
