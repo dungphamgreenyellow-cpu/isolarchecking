@@ -1,9 +1,7 @@
 // backend/compute/parsePVSyst.js
-// ✅ Clean, no wrong imports
-// ✅ Works with Node20 + ESM
-// ✅ pdf-parse correct import
-
-import pdf from "pdf-parse";
+// ✅ Node20 + ESM correct import for pdf-parse
+import pkg from "pdf-parse";
+const pdf = pkg;
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -48,7 +46,7 @@ export async function parsePVSystPDF(buffer) {
   const text = data.text.replace(/\s+/g, " ");
 
   return {
-    projectName: findOne(text, /Project\s*:\s*([^ \n]+)/i) || "",
+    projectName: findOne(text, /Project\s*:\s*([^\n]+)/i) || "",
 
     location: {
       latitude: normNum(findOne(text, /Latitude\s*:\s*([0-9.,]+)/i)),
@@ -73,6 +71,6 @@ export async function parsePVSystPDF(buffer) {
       monthlyExpected: parseMonthlyTable(text),
     },
 
-    _debug: text.slice(0, 1000),
+    _debug: text.slice(0, 800),
   };
 }
