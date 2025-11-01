@@ -1,53 +1,16 @@
-// === src/pages/HomePage.jsx — iSolarChecking Cloud Deploy v8.7.5 ===
-// ✅ Giữ nguyên pastel SaaS layout (Free / Pay-per-Report / Member Plan)
-// ✅ Cloud backend qua cloudApi.js
-// ✅ Restore "Run Cloud Parse (backend)" button for manual backend test
-// ✅ Test backend button retained (ping Cloud Compute API)
+// === src/pages/HomePage.jsx — iSolarChecking Cloud Deploy v8.7.6 ===
+// ✅ Frontend lightweight — ALL PVSyst parsing done on backend now
+// ✅ Cloud backend via analyzeOnCloud
+// ✅ Keep pastel SaaS UI & layout
+// ✅ Removed pdfjs + Tesseract (no OCR needed anymore)
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { uploadLog, uploadIrr } from "../api";
+import { uploadLog } from "../api";
 import { setSessionId } from "../sessionStore";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url";
-import Tesseract from "tesseract.js";
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 import { analyzeOnCloud } from "../utils/cloudApi";
-import { checkFusionSolarPeriod } from "../utils/fusionSolarParser";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
-// === PDF Reader (multi-page + OCR fallback) ===
-async function extractFullPDF(file) {
-  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  let fullText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    fullText += content.items.map((t) => t.str).join(" ") + "\n";
-  }
-  if (!fullText.trim()) {
-    const ocr = await Tesseract.recognize(await file.arrayBuffer(), "eng");
-    fullText = ocr.data.text;
-  }
-  return { fullText };
-}
-
-// === Rough Info Extractor (PVSyst) ===
-function roughExtractBasicInfo(text) {
-  const clean = text.replace(/\s+/g, " ");
-  const gpsMatch = clean.match(/(-?\d{1,3}\.\d{2,})[°,]?\s*(\d{1,3}\.\d{2,})/);
-  const module = clean.match(/\b(JAM|LR|TSM|JKM|CS)[0-9A-Za-z\-\/]+\b/)?.[0] || "";
-  const inverter = clean.match(/\b(SUN2000|SG|STP|PVS)\-[A-Za-z0-9\-]+/)?.[0] || "";
-  const cod = clean.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/)?.[0] || "";
-  return {
-    gps: gpsMatch ? `${gpsMatch[1]}, ${gpsMatch[2]}` : "",
-    module,
-    inverter,
-    cod,
-  };
-}
 
 // === Quick helper ===
 function inferCountryFromLocation(str = "") {
@@ -114,10 +77,17 @@ export default function HomePage() {
     setChecking(true);
     try {
       let autoInfo = {};
+
+      // ✅ NEW: Parse PVSyst via backend
       if (pvsystFile) {
-        const result = await extractFullPDF(pvsystFile);
-        localStorage.setItem("pvsyst_full_text", result.fullText);
-        autoInfo = roughExtractBasicInfo(result.fullText);
+        const fd = new FormData();
+        fd.append("file", pvsystFile);
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/parse-pvsyst`, {
+          method: "POST",
+          body: fd,
+        });
+        const json = await res.json();
+        autoInfo = json?.data || {};
       }
 
       let cloudResult = null;
@@ -125,7 +95,6 @@ export default function HomePage() {
         cloudResult = await analyzeOnCloud({
           logFile,
           irrFile,
-          pvsystFile,
           extras: { gpsCountry: autoInfo?.location || "Vietnam" },
         });
       } catch (e) {
@@ -184,7 +153,7 @@ export default function HomePage() {
             system performance, identify losses, and generate clear visual reports.
           </p>
 
-          {/* === Pricing cards === */}
+          {/* === Pricing Cards === */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
             <div className="bg-green-50 border border-green-200 px-4 py-4 rounded-2xl">
               <p className="font-semibold text-green-700 text-[16px]">Free Trial</p>
@@ -200,7 +169,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* === Upload section === */}
+          {/* === Upload Section === */}
           <h3 className="text-[18px] font-semibold text-gray-700 mb-5">Upload Your Data</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-left">
             <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm hover:shadow transition">
@@ -250,12 +219,12 @@ export default function HomePage() {
                 className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100 transition"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Optional — upload Excel/CSV daily irradiation (kWh/m²). If empty, system uses national baseline.
+                Optional — upload Excel/CSV daily irradiation (kWh/m²).
               </p>
             </div>
           </div>
 
-          {/* === Action buttons (Restored Cloud Parse) === */}
+          {/* === Action Buttons === */}
           <div className="flex flex-col md:flex-row justify-center items-center gap-3 mt-4">
             <button
               onClick={handleStart}
@@ -271,15 +240,13 @@ export default function HomePage() {
                 try {
                   const fd = new FormData();
                   fd.append("file", logFile);
-                  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/parse-fusion`, {
-                  method: "POST",
-                  body: fd,
-                });
+                  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/analysis`, {
+                    method: "POST",
+                    body: fd,
+                  });
                   const data = await res.json();
-                  console.log("☁️ Cloud Parse Result:", data);
                   alert("✅ Cloud Parse OK!\n" + JSON.stringify(data.message || data, null, 2));
                 } catch (err) {
-                  console.error("❌ Cloud parse error:", err);
                   alert("❌ Cloud Parse failed: " + err.message);
                 }
               }}
@@ -322,9 +289,10 @@ export default function HomePage() {
   );
 }
 
-
-/* Auto-wired: backend upload handlers */
-async function handleUploadBackend(file){
+/* Auto-wired backend upload */
+async function handleUploadBackend(file) {
   const r = await uploadLog(file);
-  if (r.ok && r.id) { setSessionId(r.id); }
+  if (r.ok && r.id) {
+    setSessionId(r.id);
+  }
 }
