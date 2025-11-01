@@ -92,3 +92,34 @@ export async function parseFusionSolarLog(buffer, filename) {
     dayCount: Object.keys(daily).length,
   };
 }
+/**
+ * Legacy compatibility function
+ * Used by FileCheckModal to check date range of FusionSolar logs
+ */
+export async function checkFusionSolarPeriod(buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const csv = XLSX.utils.sheet_to_csv(sheet);
+
+  return new Promise((resolve, reject) => {
+    const rows = [];
+    Papa.parse(csv, {
+      header: true,
+      skipEmptyLines: true,
+      worker: true,
+      step: (result) => rows.push(result.data),
+      complete: () => {
+        const dates = rows
+          .map(r => r["Date"] || r["Day"] || r["日期"] || "")
+          .filter(Boolean);
+        const unique = [...new Set(dates)];
+        resolve({
+          startDate: unique[0] || null,
+          endDate: unique[unique.length - 1] || null,
+          dayCount: unique.length,
+        });
+      },
+      error: reject
+    });
+  });
+}
