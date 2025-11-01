@@ -9,6 +9,7 @@ import analysisRoutes from "./routes/analysis.js";
 
 import { checkFusionSolarPeriod } from "./compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
+import { parsePVSystPDF } from "./compute/parsePVSyst.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -17,16 +18,16 @@ const PORT = process.env.PORT || 8080;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ✅ Allow LARGE FILE UPLOADS (no MB limit)
+// ✅ Allow LARGE FILE UPLOADS
 app.use(
   fileUpload({
     useTempFiles: true,
     tempFileDir: "/tmp/",
-    limits: {}, // No explicit size limit
+    limits: {}, 
   })
 );
 
-// ✅ Enable CORS for all domains (frontend & local)
+// ✅ CORS open
 app.use(
   cors({
     origin: "*",
@@ -35,7 +36,6 @@ app.use(
   })
 );
 
-// ✅ Increase JSON body limit (if needed)
 app.use(express.json({ limit: "200mb" }));
 app.use(express.urlencoded({ extended: true, limit: "200mb" }));
 
@@ -44,12 +44,25 @@ app.get("/", (req, res) => {
   res.send("✅ iSolarChecking backend cloud compute is running!");
 });
 
-// === FusionSolar Parser (legacy button) ===
+// === Parse PVSyst PDF ===
+app.post("/api/parse-pvsyst", async (req, res) => {
+  try {
+    if (!req.files || !req.files.file)
+      return res.status(400).json({ error: "No PDF uploaded" });
+
+    const info = await parsePVSystPDF(req.files.file);
+    res.json({ success: true, data: info });
+  } catch (err) {
+    console.error("parse-pvsyst error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// === FusionSolar legacy ===
 app.post("/api/parse-fusion", async (req, res) => {
   try {
-    if (!req.files || !req.files.file) {
+    if (!req.files || !req.files.file)
       return res.status(400).json({ error: "No file uploaded" });
-    }
 
     const f = req.files.file;
     const parsed = await checkFusionSolarPeriod(f);
@@ -65,9 +78,8 @@ app.post("/api/parse-fusion", async (req, res) => {
 app.post("/api/compute-rpr", async (req, res) => {
   try {
     const { parsed, dailyGHI, capacity } = req.body;
-    if (!parsed || !capacity) {
+    if (!parsed || !capacity)
       return res.status(400).json({ error: "Missing input data" });
-    }
 
     const rpr = computeRealPerformanceRatio(parsed, dailyGHI || [], capacity);
     return res.json({ success: true, rpr });
@@ -85,3 +97,4 @@ app.use("/api", analysisRoutes);
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`☀️ Backend running → http://localhost:${PORT}`);
 });
+ủa 
