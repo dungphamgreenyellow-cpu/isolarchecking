@@ -1,7 +1,7 @@
 // backend/compute/parsePVSyst.js
-// ✅ Node20 + ESM correct import for pdf-parse
-import pkg from "pdf-parse";
-const pdf = pkg;
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdf = require("pdf-parse");
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
