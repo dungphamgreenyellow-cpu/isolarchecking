@@ -1,11 +1,30 @@
+// backend/routes/analysis.js
 import express from "express";
+import { parseFusionSolarLog } from "../compute/fusionSolarParser.js";
+
 const router = express.Router();
 
-// GET /api/health — ping
-router.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "analysis", ts: Date.now() });
-});
+// POST /api/analysis
+router.post("/", async (req, res) => {
+  try {
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
-// (Nếu có endpoint phân tích khác, giữ nguyên route path FE đang gọi rồi bổ sung ở đây)
+    const file = req.files.file; // uploaded file
+    const buffer = file.data;    // file buffer
+
+    const parsedData = await parseFusionSolarLog(buffer, file.name);
+
+    return res.json({
+      success: true,
+      data: parsedData,
+    });
+
+  } catch (err) {
+    console.error("❌ Analysis Error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

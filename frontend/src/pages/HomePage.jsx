@@ -272,9 +272,9 @@ export default function HomePage() {
                   const fd = new FormData();
                   fd.append("file", logFile);
                   const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/parse-fusion`, {
-                    method: "POST",
-                    body: fd,
-                  });
+                  method: "POST",
+                  body: fd,
+                });
                   const data = await res.json();
                   console.log("☁️ Cloud Parse Result:", data);
                   alert("✅ Cloud Parse OK!\n" + JSON.stringify(data.message || data, null, 2));
