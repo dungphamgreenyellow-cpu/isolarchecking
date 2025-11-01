@@ -17,50 +17,47 @@ const PORT = process.env.PORT || 8080;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// === 1. Allow 50MB upload size ===
+// ✅ Allow LARGE FILE UPLOADS (no MB limit)
 app.use(
   fileUpload({
-    limits: { fileSize: 50 * 1024 * 1024 },
-    useTempFiles: false,
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+    limits: {}, // No explicit size limit
   })
 );
 
-// === 2. CORS Safe ===
+// ✅ Enable CORS for all domains (frontend & local)
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || origin.includes("localhost") || /\.app\.github\.dev$/.test(origin)) {
-        callback(null, true);
-      } else {
-        console.warn("❌ Blocked CORS:", origin);
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
   })
 );
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// ✅ Increase JSON body limit (if needed)
+app.use(express.json({ limit: "200mb" }));
+app.use(express.urlencoded({ extended: true, limit: "200mb" }));
 
 // === Root Check ===
 app.get("/", (req, res) => {
   res.send("✅ iSolarChecking backend cloud compute is running!");
 });
 
-// === FusionSolar Parser ===
+// === FusionSolar Parser (legacy button) ===
 app.post("/api/parse-fusion", async (req, res) => {
   try {
-    if (!req.files || !req.files.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
     const f = req.files.file;
     const parsed = await checkFusionSolarPeriod(f);
 
-    res.json({
-      success: true,
-      ...parsed,
-    });
+    return res.json({ success: true, ...parsed });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("parse-fusion error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -68,12 +65,15 @@ app.post("/api/parse-fusion", async (req, res) => {
 app.post("/api/compute-rpr", async (req, res) => {
   try {
     const { parsed, dailyGHI, capacity } = req.body;
-    if (!parsed || !capacity) return res.status(400).json({ error: "Missing input data" });
+    if (!parsed || !capacity) {
+      return res.status(400).json({ error: "Missing input data" });
+    }
 
     const rpr = computeRealPerformanceRatio(parsed, dailyGHI || [], capacity);
-    res.json({ success: true, rpr });
+    return res.json({ success: true, rpr });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("compute-rpr error:", err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
