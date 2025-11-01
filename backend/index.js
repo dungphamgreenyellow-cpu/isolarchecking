@@ -94,7 +94,6 @@ app.post("/api/compute-rpr", async (req, res) => {
 });
 
 // === Attach API modules ===
-app.use("/api", uploadRoutes);
 app.use("/api", analysisRoutes);
 
 // === Start Server ===
