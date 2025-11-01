@@ -1,8 +1,8 @@
-// === src/pages/HomePage.jsx — iSolarChecking Cloud Deploy v8.7.6 ===
+// === src/pages/HomePage.jsx — iSolarChecking Cloud Deploy v8.7.7 ===
 // ✅ Frontend lightweight — ALL PVSyst parsing done on backend now
 // ✅ Cloud backend via analyzeOnCloud
 // ✅ Keep pastel SaaS UI & layout
-// ✅ Removed pdfjs + Tesseract (no OCR needed anymore)
+// ✅ No OCR / no pdfjs on frontend
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -23,7 +23,7 @@ function inferCountryFromLocation(str = "") {
   return "Vietnam";
 }
 
-// === TestBackendButton (ping Cloud API) ===
+// === TestBackendButton ===
 function TestBackendButton() {
   const [reply, setReply] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,10 +75,11 @@ export default function HomePage() {
   const handleFileCheckNext = async (parsedData) => {
     setFileCheckOpen(false);
     setChecking(true);
+
     try {
       let autoInfo = {};
 
-      // ✅ NEW: Parse PVSyst via backend
+      // ✅ Parse PVSyst on backend
       if (pvsystFile) {
         const fd = new FormData();
         fd.append("file", pvsystFile);
@@ -90,11 +91,13 @@ export default function HomePage() {
         autoInfo = json?.data || {};
       }
 
+      // ✅ Cloud Compute
       let cloudResult = null;
       try {
         cloudResult = await analyzeOnCloud({
           logFile,
           irrFile,
+          pvsystFile,
           extras: { gpsCountry: autoInfo?.location || "Vietnam" },
         });
       } catch (e) {
@@ -102,8 +105,8 @@ export default function HomePage() {
       }
 
       const merged = {
-        ...autoInfo,
-        ...parsedData,
+        ...autoInfo,      // from PVSyst
+        ...parsedData,    // quick parse from FileCheckModal
         actualProduction:
           cloudResult?.summary?.totalEac ?? parsedData?.totalProduction ?? 0,
         dailyProduction:
@@ -112,9 +115,11 @@ export default function HomePage() {
         cloudMeta: cloudResult?.meta ?? null,
         cloudDebug: cloudResult?.debug ?? null,
       };
+
       setProjectData(merged);
       setModalOpen(true);
-    } catch {
+    } catch (err) {
+      console.error(err);
       setProjectData(parsedData || {});
       setModalOpen(true);
     } finally {
@@ -127,12 +132,14 @@ export default function HomePage() {
       manualInfo?.country ||
       manualInfo?.nation ||
       inferCountryFromLocation(manualInfo?.location || projectData?.location);
+
     const merged = {
       ...projectData,
       ...manualInfo,
       logFileName: logFile?.name,
       gpsCountry: gpsCountry || "Vietnam",
     };
+
     navigate("/report", {
       state: {
         projectData: merged,
@@ -149,8 +156,7 @@ export default function HomePage() {
             Your Solar Performance Insight Engine
           </h1>
           <p className="text-gray-600 mb-8 text-[15px]">
-            Automatically analyze your FusionSolar or iSolarCloud log files to evaluate
-            system performance, identify losses, and generate clear visual reports.
+            Automatically analyze your FusionSolar or iSolarCloud log files to evaluate system performance, identify losses, and generate clear visual reports.
           </p>
 
           {/* === Pricing Cards === */}
@@ -169,7 +175,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* === Upload Section === */}
+          {/* === Upload Inputs === */}
           <h3 className="text-[18px] font-semibold text-gray-700 mb-5">Upload Your Data</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-left">
             <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm hover:shadow transition">
@@ -182,53 +188,40 @@ export default function HomePage() {
               <input
                 type="file"
                 onChange={(e) => setLogFile(e.target.files[0])}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition"
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Required — FusionSolar / iSolarCloud export file
-              </p>
             </div>
 
-            <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm hover:shadow transition">
+            <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-amber-500 text-xl">📄</span>
-                <p className="font-semibold text-amber-700 text-[15px]">
-                  PVSyst Simulation (optional)
-                </p>
+                <p className="font-semibold text-amber-700 text-[15px]">PVSyst Simulation (optional)</p>
               </div>
               <input
                 type="file"
                 onChange={(e) => setPvsystFile(e.target.files[0])}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 transition"
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 transition"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Optional — expected energy model for comparison
-              </p>
             </div>
 
-            <div className="rounded-2xl border border-yellow-100 bg-white p-4 shadow-sm hover:shadow transition">
+            <div className="rounded-2xl border border-yellow-100 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-yellow-500 text-xl">☀️</span>
-                <p className="font-semibold text-yellow-700 text-[15px]">
-                  Irradiation Data (optional)
-                </p>
+                <p className="font-semibold text-yellow-700 text-[15px]">Irradiation Data (optional)</p>
               </div>
               <input
                 type="file"
                 onChange={(e) => setIrrFile(e.target.files[0])}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100 transition"
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100 transition"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Optional — upload Excel/CSV daily irradiation (kWh/m²).
-              </p>
             </div>
           </div>
 
-          {/* === Action Buttons === */}
+          {/* === Buttons === */}
           <div className="flex flex-col md:flex-row justify-center items-center gap-3 mt-4">
             <button
               onClick={handleStart}
-              className="bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium px-8 py-3 rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-md hover:shadow-lg"
+              className="bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium px-8 py-3 rounded-xl shadow-md hover:shadow-lg transition"
               disabled={checking}
             >
               {checking ? "Checking..." : "Start Analysis"}
@@ -237,20 +230,16 @@ export default function HomePage() {
             <button
               onClick={async () => {
                 if (!logFile) return alert("Please upload an Actual Log file first!");
-                try {
-                  const fd = new FormData();
-                  fd.append("file", logFile);
-                  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/analysis`, {
-                    method: "POST",
-                    body: fd,
-                  });
-                  const data = await res.json();
-                  alert("✅ Cloud Parse OK!\n" + JSON.stringify(data.message || data, null, 2));
-                } catch (err) {
-                  alert("❌ Cloud Parse failed: " + err.message);
-                }
+                const fd = new FormData();
+                fd.append("file", logFile);
+                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/analysis`, {
+                  method: "POST",
+                  body: fd,
+                });
+                const data = await res.json();
+                alert("✅ Cloud Parse OK!\n" + JSON.stringify(data.message || data, null, 2));
               }}
-              className="border border-gray-300 text-gray-700 font-medium px-8 py-3 rounded-xl hover:bg-gray-50 transition-all shadow-sm hover:shadow"
+              className="border border-gray-300 text-gray-700 font-medium px-8 py-3 rounded-xl hover:bg-gray-50 transition"
             >
               Run Cloud Parse (backend)
             </button>
@@ -279,6 +268,7 @@ export default function HomePage() {
         onClose={() => setFileCheckOpen(false)}
         onNext={handleFileCheckNext}
       />
+
       <ProjectConfirmModal
         open={modalOpen}
         initialData={projectData}
@@ -289,10 +279,8 @@ export default function HomePage() {
   );
 }
 
-/* Auto-wired backend upload */
+/* Auto-wired upload handler */
 async function handleUploadBackend(file) {
   const r = await uploadLog(file);
-  if (r.ok && r.id) {
-    setSessionId(r.id);
-  }
+  if (r.ok && r.id) setSessionId(r.id);
 }
