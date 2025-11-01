@@ -1,4 +1,5 @@
-import pdf from "pdf-parse";
+import pkg from "pdf-parse";
+const pdf = pkg;
 
 export async function parsePVSystPDF(file) {
   const buffer = file.data;
