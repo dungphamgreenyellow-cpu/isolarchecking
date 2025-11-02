@@ -72,6 +72,20 @@ function pickField(row, keys) {
   return undefined;
 }
 
+// Detect columns from a header row (used for FujiSeal-like exports)
+function detectColumns(header) {
+  const lower = header.map(h => (h || '').toString().toLowerCase());
+
+  const find = (patterns) =>
+    header[ lower.findIndex(h => patterns.some(p => h.includes(p))) ];
+
+  const dateCol = find(["start time", "time", "date"]);
+  const invCol  = find(["manageobject", "inverter", "device"]);
+  const eacCol  = find(["total yield", "total pv yield", "today's yield", "daily energy"]);
+
+  return { dateCol, invCol, eacCol };
+}
+
 // Detect simple phantom date like '31/8' (no year) -> skip
 function isPhantomDate(str) {
   if (!str) return false;
