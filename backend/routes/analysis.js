@@ -4,8 +4,8 @@ import { checkFusionSolarPeriod } from "../compute/fusionSolarParser.js";
 
 const router = express.Router();
 
-// POST /api/analysis
-router.post("/", async (req, res) => {
+// POST /analysis/compute
+router.post("/compute", async (req, res) => {
   try {
     if (!req.files || !req.files.file) {
       return res.status(400).json({ error: "No file uploaded" });

@@ -232,7 +232,7 @@ export default function HomePage() {
                 if (!logFile) return alert("Please upload an Actual Log file first!");
                 const fd = new FormData();
                 fd.append("file", logFile);
-                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/analysis`, {
+                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/analysis/compute`, {
                   method: "POST",
                   body: fd,
                 });

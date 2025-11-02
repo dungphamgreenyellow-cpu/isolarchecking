@@ -93,7 +93,7 @@ app.post("/api/compute-rpr", async (req, res) => {
 
 // === Mount routes (QUAN TRỌNG): bật middleware để req.files hoạt động
 app.use("/api", uploadRoutes);
-app.use("/api", analysisRoutes);
+app.use("/analysis", analysisRoutes);
 
 // === Start
 app.listen(PORT, "0.0.0.0", () => {
