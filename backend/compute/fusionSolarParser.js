@@ -28,17 +28,18 @@ async function parseXLSX(buffer) {
   const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
   // Header thật nằm ở dòng 4 (index = 3)
-  const header = (sheetData[3] || []).map(h => (h || "").toString().trim());
+  const headerRaw = (sheetData[3] || []).map(h => (h || "").toString().trim());
 
-  // Dữ liệu từ dòng 5 trở đi
+  // Dữ liệu từ dòng 5 trở đi — giữ nguyên tất cả cột
   const rows = (sheetData.slice(4) || []).map(row => {
     const obj = {};
-    header.forEach((colName, index) => {
+    headerRaw.forEach((colName, index) => {
       obj[colName] = row[index];
     });
     return obj;
   });
 
+  // Trả về rows; header có thể lấy lại bằng Object.keys(rows[0]) khi cần
   return rows;
 }
 
@@ -205,21 +206,38 @@ export async function checkFusionSolarPeriod(file) {
     throw new Error('Failed to parse FusionSolar file: ' + err.message);
   }
 
-  // Build daily min/max per inverter using detected columns
-  // First determine header and columns
-  let header = [];
-  if (filename.toLowerCase().endsWith('.csv')) {
-    header = Object.keys(rows[0] || {});
-  } else {
-    // For XLSX we already populated rows from parseXLSX which used header row index 3
-    // Re-create header from first row keys if available, otherwise keep as empty
-    header = Object.keys(rows[0] || {});
-  }
+  // Build rows header and find required columns
+  const header = Object.keys(rows[0] || {});
 
-  const { dateCol, invCol, eacCol } = detectColumns(header);
-  console.log("[parser] cols:", { dateCol, invCol, eacCol });
+  const norm = s => (s || "").toString().trim().toLowerCase().replace(/\s+/g, " ");
+  const findHeader = (candidates) => {
+    for (const cand of candidates) {
+      const nc = norm(cand);
+      const exact = header.find(h => norm(h) === nc);
+      if (exact) return exact;
+    }
+    // fallback: includes
+    for (const h of header) {
+      const nh = norm(h);
+      if (candidates.some(c => nh.includes(norm(c)))) return h;
+    }
+    return null;
+  };
 
-  const daily = {};
+  const dateCol = findHeader(["Start Time", "Date Time", "DateTime", "StartTime"]);
+  const invCol  = findHeader(["ManageObject", "Manage Object", "Inverter", "Device"]);
+  const eacCol  = findHeader([
+    "Accumulated amount of absorbed electricity(kWh)",
+    "Accumulated amount of absorbed electricity (kWh)",
+    "Accumulated amount of absorbed electricity",
+    "Eac",
+  ]);
+  const activeCol = findHeader(["Active power(kW)", "Active power", "Active Power (kW)"]);
+
+  console.log('[parser] cols:', { dateCol, invCol, eacCol, activeCol });
+
+  // Collect daily min/max per inverter using Eac
+  const dailyMap = {};
   for (const r of rows) {
     const day = toLocalYMD(r[dateCol]);
     if (!day) continue;
@@ -228,32 +246,38 @@ export async function checkFusionSolarPeriod(file) {
     const eac = toNumber(r[eacCol]);
     if (!Number.isFinite(eac)) continue;
 
-    if (!daily[day]) daily[day] = {};
-    if (!daily[day][inv]) daily[day][inv] = { min: eac, max: eac };
-    if (eac < daily[day][inv].min) daily[day][inv].min = eac;
-    if (eac > daily[day][inv].max) daily[day][inv].max = eac;
+    if (!dailyMap[day]) dailyMap[day] = {};
+    if (!dailyMap[day][inv]) dailyMap[day][inv] = { min: eac, max: eac };
+    if (eac < dailyMap[day][inv].min) dailyMap[day][inv].min = eac;
+    if (eac > dailyMap[day][inv].max) dailyMap[day][inv].max = eac;
   }
 
-  // Aggregate per-date: sum over inverters (max-min of Eac per inverter), ignore non-positive totals
+  // dailyProduction: sum positive deltas per day
   const dailyProduction = {};
-  for (const day of Object.keys(daily)) {
+  for (const day of Object.keys(dailyMap).sort()) {
     let sum = 0;
-    for (const inv of Object.keys(daily[day])) {
-      const { min, max } = daily[day][inv];
+    for (const inv of Object.keys(dailyMap[day])) {
+      const { min, max } = dailyMap[day][inv];
       const delta = max - min;
       if (Number.isFinite(delta) && delta > 0) sum += delta;
     }
     if (sum > 0) dailyProduction[day] = Number(sum.toFixed(3));
   }
 
-  const datesSorted = Object.keys(dailyProduction).sort();
-  const totalProduction = Object.values(dailyProduction).reduce((a,b)=>a+b,0);
+  // monthlyProduction: sum dailyProduction per YYYY-MM
+  const monthlyProduction = {};
+  for (const [day, value] of Object.entries(dailyProduction)) {
+    const month = day.slice(0,7); // YYYY-MM
+    monthlyProduction[month] = (monthlyProduction[month] || 0) + value;
+  }
+  for (const m of Object.keys(monthlyProduction)) monthlyProduction[m] = Number(monthlyProduction[m].toFixed(3));
 
+  const days = Object.keys(dailyProduction).sort();
   return {
+    records: rows,
     dailyProduction,
-    totalProduction: Number(totalProduction.toFixed(3)),
-    dayCount: Object.keys(dailyProduction).length,
-    startDate: datesSorted[0] || null,
-    endDate: datesSorted[datesSorted.length-1] || null,
+    monthlyProduction,
+    startDate: days[0] || null,
+    endDate: days[days.length-1] || null,
   };
 }
