@@ -94,6 +94,7 @@ app.post("/api/compute-rpr", async (req, res) => {
 // === Mount routes (QUAN TRỌNG): bật middleware để req.files hoạt động
 app.use("/api", uploadRoutes);
 app.use("/analysis", analysisRoutes);
+// ESM: backend uses "type": "module" in package.json — imports are ES modules
 
 // === Start
 app.listen(PORT, "0.0.0.0", () => {
