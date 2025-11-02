@@ -1,6 +1,6 @@
 // backend/routes/analysis.js
 import express from "express";
-import { parseFusionSolarLog } from "../compute/fusionSolarParser.js";
+import { checkFusionSolarPeriod } from "../compute/fusionSolarParser.js";
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.post("/", async (req, res) => {
     const file = req.files.file; // uploaded file
     const buffer = file.data;    // file buffer
 
-    const parsedData = await parseFusionSolarLog(buffer, file.name);
+  const parsedData = await checkFusionSolarPeriod({ name: file.name, data: buffer });
 
     return res.json({
       success: true,
