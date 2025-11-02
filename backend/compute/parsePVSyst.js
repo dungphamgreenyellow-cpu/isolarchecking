@@ -1,7 +1,8 @@
 // backend/compute/parsePVSyst.js
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse"); // ✅ pdf-parse for Node20 + ESM
+const pdfModule = require("pdf-parse");
+const pdf = pdfModule.default ?? pdfModule;
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -51,8 +52,8 @@ function parseMonthlyTable(text) {
 }
 
 export async function parsePVSystPDF(buffer) {
-  const data = await pdf(buffer);
-  const text = data.text.replace(/\s+/g, " ");
+  const result = await pdf(buffer);
+  const text = result.text.replace(/\s+/g, " ");
 
   return {
     projectName: findOne(text, /Project\s*:\s*([^\n]+)/i) || "",
