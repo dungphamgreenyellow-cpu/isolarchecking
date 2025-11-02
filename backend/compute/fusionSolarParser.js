@@ -152,7 +152,7 @@ function toLocalYYYYMMDD(dateStr, timeStr) {
 // Main function required by callers
 export async function checkFusionSolarPeriod(file) {
   // `file` is expected to be an object from express-fileupload or similar { name, data }
-  const buffer = file.data || file;
+  const buffer = file.data || Buffer.from(await file.arrayBuffer());
 
   // Parse rows
   let rows = [];
