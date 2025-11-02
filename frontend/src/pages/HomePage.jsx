@@ -128,24 +128,50 @@ export default function HomePage() {
   };
 
   const handleConfirm = (manualInfo) => {
-    const gpsCountry =
-      manualInfo?.country ||
-      manualInfo?.nation ||
-      inferCountryFromLocation(manualInfo?.location || projectData?.location);
+    (async () => {
+      const gpsCountry =
+        manualInfo?.country ||
+        manualInfo?.nation ||
+        inferCountryFromLocation(manualInfo?.location || projectData?.location);
 
-    const merged = {
-      ...projectData,
-      ...manualInfo,
-      logFileName: logFile?.name,
-      gpsCountry: gpsCountry || "Vietnam",
-    };
+      const merged = {
+        ...projectData,
+        ...manualInfo,
+        logFileName: logFile?.name,
+        gpsCountry: gpsCountry || "Vietnam",
+      };
 
-    navigate("/report", {
-      state: {
-        projectData: merged,
-        files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null },
-      },
-    });
+      // Gọi backend parse ở bước xác nhận (Start Analyze)
+      try {
+        const fd = new FormData();
+        fd.append("logfile", logFile);
+        const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, {
+          method: "POST",
+          body: fd,
+        });
+        const res = await r.json();
+        if (!res?.success) {
+          console.error("Parse failed:", res);
+          // fallback: navigate vẫn với merged nhưng báo lỗi
+          navigate("/report", { state: { projectData: merged, files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null } } });
+          return;
+        }
+
+        // nếu parse thành công, chuyển sang Report với parse result + metadata từ merged
+        navigate("/report", {
+          state: {
+            parse: res,
+            projectData: merged,
+            files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null },
+            extras: { capacity: manualInfo?.capacity, gamma: manualInfo?.gamma, degradation: manualInfo?.degradation }
+          },
+        });
+      } catch (err) {
+        console.error("Parse request failed:", err);
+        // fallback: navigate anyway
+        navigate("/report", { state: { projectData: merged, files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null } } });
+      }
+    })();
   };
 
   return (
@@ -238,10 +264,10 @@ export default function HomePage() {
                     body: fd,
                   });
                   const res = await r.json();
-                  if (!res.success) throw new Error(res.error || "Parse fail");
-                  // navigate to report with parse result
-                  navigate("/report", { state: { parse: res } });
+                  console.log("Cloud parse result:", res);
+                  alert("Cloud parse finished — check console for details.");
                 } catch (err) {
+                  console.warn("Cloud parse failed:", err);
                   alert("Cloud parse failed: " + (err.message || err));
                 }
               }}
