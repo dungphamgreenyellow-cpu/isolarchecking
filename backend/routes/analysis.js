@@ -14,16 +14,16 @@ router.post("/compute", async (req, res) => {
     const file = req.files.file; // uploaded file
     const buffer = file.data;    // file buffer
 
-  const parsedData = await checkFusionSolarPeriod({ name: file.name, data: buffer });
+  const result = await checkFusionSolarPeriod({ name: file.name, data: buffer });
 
     return res.json({
       success: true,
-      data: parsedData,
+      ...result,
     });
 
-  } catch (err) {
-    console.error("❌ Analysis Error:", err);
-    return res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error("[analysis-error]", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
