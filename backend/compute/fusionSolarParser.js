@@ -25,18 +25,21 @@ async function parseCSV(buffer) {
 async function parseXLSX(buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const csv = XLSX.utils.sheet_to_csv(sheet);
-  return new Promise((resolve, reject) => {
-    const rows = [];
-    Papa.parse(csv, {
-      header: true,
-      skipEmptyLines: true,
-      worker: false,
-      step: (result) => rows.push(result.data),
-      complete: () => resolve(rows),
-      error: (err) => reject(err),
+  const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+
+  // Header thật nằm ở dòng 4 (index = 3)
+  const header = (sheetData[3] || []).map(h => (h || "").toString().trim());
+
+  // Dữ liệu từ dòng 5 trở đi
+  const rows = (sheetData.slice(4) || []).map(row => {
+    const obj = {};
+    header.forEach((colName, index) => {
+      obj[colName] = row[index];
     });
+    return obj;
   });
+
+  return rows;
 }
 
 // Normalize possible column names for ManageObject (inverter identifier)
