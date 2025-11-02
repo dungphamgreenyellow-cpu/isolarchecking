@@ -263,8 +263,16 @@ export default function HomePage() {
                     method: "POST",
                     body: fd,
                   });
-                  const res = await r.json();
-                  console.log("Cloud parse result:", res);
+                  const text = await r.text();
+                  let data;
+                  try {
+                    data = JSON.parse(text);
+                  } catch (e) {
+                    alert("Backend trả về dữ liệu không hợp lệ (không phải JSON). Kiểm tra log backend.");
+                    console.error("Invalid JSON from backend:", text);
+                    return;
+                  }
+                  console.log("Cloud parse result:", data);
                   alert("Cloud parse finished — check console for details.");
                 } catch (err) {
                   console.warn("Cloud parse failed:", err);
