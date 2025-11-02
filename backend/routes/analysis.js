@@ -20,8 +20,8 @@ router.post("/compute", async (req, res) => {
 
     return res.json({ success: true, ...result });
   } catch (e) {
-    console.error("[analysis-error]", e);
-    return res.status(500).json({ success: false, error: e?.message || "Internal error" });
+    console.error(e);
+    return res.status(500).json({ success: false, error: e?.message });
   }
 });
 
@@ -40,8 +40,8 @@ router.post("/realpr", async (req, res) => {
     const result = computeRealPerformanceRatio(parsed, dailyGHI, capacity);
     return res.json({ success: true, rpr: result, details: result });
   } catch (e) {
-    console.error("[analysis-error]", e);
-    return res.status(500).json({ success: false, error: e?.message || "Internal error" });
+    console.error(e);
+    return res.status(500).json({ success: false, error: e?.message });
   }
 });
 
