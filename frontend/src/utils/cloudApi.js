@@ -1,10 +1,3 @@
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 120000,
-});
-
 console.log("🌐 [cloudApi] Backend URL:", import.meta.env.VITE_API_BASE_URL);
 
 export async function analyzeOnCloud({ logFile, irrFile, pvsystFile, extras = {} }) {
@@ -16,12 +9,34 @@ export async function analyzeOnCloud({ logFile, irrFile, pvsystFile, extras = {}
   if (pvsystFile) fd.append("pvsystFile", pvsystFile);
   Object.entries(extras).forEach(([k, v]) => fd.append(k, String(v)));
 
-  const res = await api.post("/api/parse-fusion", fd, {
-    headers: { "Content-Type": "multipart/form-data" },
-    maxBodyLength: Infinity,
-    maxContentLength: Infinity,
+  const url = `${import.meta.env.VITE_API_BASE_URL}/api/parse-fusion`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: fd,
+    // no explicit headers so browser sets multipart boundary
   });
 
-  console.log("✅ [cloudApi] Cloud compute OK:", res.data);
-  return res.data;
+  if (!response.ok) {
+    throw new Error(`Backend returned non-OK status ${response.status}`);
+  }
+
+  const text = await response.text();
+  if (!text) throw new Error("Empty response from backend");
+  const t = text.trim();
+  if (t.startsWith("<") || t.toUpperCase().includes("HTML")) {
+    console.error("Invalid HTML response from backend:", t.slice(0, 400));
+    throw new Error("Backend trả HTML thay vì JSON. Kiểm tra log backend.");
+  }
+
+  let data;
+  try {
+    data = JSON.parse(t);
+  } catch (err) {
+    console.error("Failed to parse JSON from backend:", t.slice(0, 400));
+    throw new Error("Backend trả dữ liệu không hợp lệ (không phải JSON)");
+  }
+
+  console.log("✅ [cloudApi] Cloud compute OK:", data);
+  return data;
 }
