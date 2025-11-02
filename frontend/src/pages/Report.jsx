@@ -16,11 +16,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import {
-  computeRealPerformanceRatio,
-  computeDailyRPRSeries,
-} from "../utils/realPRCalculator";
-import { checkFusionSolarPeriod } from "../utils/fusionSolarParser";
+// RPR now computed on backend via /analysis/realpr
 import { getMonthlyGHI } from "../data/ghiBaseline";
 
 function fmtMonthRange(start, end) {
@@ -75,24 +71,33 @@ export default function Report() {
 
   // === Auto baseline GHI based on log month ===
   React.useEffect(() => {
+    // Prefer parse provided in location state (from backend). Fallback: use projectData.parse if present.
     (async () => {
-      if (!logFile) return;
       try {
-        const parsed = await checkFusionSolarPeriod(logFile);
-        const month = parsed?.startDate
-          ? new Date(parsed.startDate).getMonth() + 1
-          : new Date().getMonth() + 1;
+        const parse = state?.parse || state?.projectData?.parse || null;
+        let month = new Date().getMonth() + 1;
+        let reportDays = days || 15;
+        if (parse && parse.startDate) {
+          month = new Date(parse.startDate).getMonth() + 1;
+          reportDays = Object.keys(parse.dailyProduction || {}).length || reportDays;
+          setPeriodText(fmtMonthRange(parse.startDate, parse.endDate));
+        } else if (logFile) {
+          // fallback: try local parse (rare)
+          try {
+            // optional: keep previous behavior if needed
+          } catch (err) {
+            // ignore
+          }
+        }
         const baselineGHI = getMonthlyGHI(gpsCountry || "Vietnam", month) / 30;
-        const reportDays = parsed?.days || days || 15;
         setTotalIrr(Math.round(baselineGHI * reportDays));
-        setPeriodText(fmtMonthRange(parsed.startDate, parsed.endDate));
         setGeneratedText(todayStr());
-      } catch {
+      } catch (err) {
         setPeriodText("—");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logFile]);
+  }, [state, logFile]);
 
   const now = new Date();
   const country = gpsCountry || "Vietnam";
@@ -111,26 +116,37 @@ export default function Report() {
   // === Compute Real PR + Daily Trend ===
   React.useEffect(() => {
     (async () => {
-      if (!logFile || !capKWp) {
+      const parse = state?.parse || state?.projectData?.parse || null;
+      if (!parse || !capKWp) {
         setRealPR(rprRef);
         setDailyRPR([]);
         return;
       }
       try {
         setLoadingPR(true);
-        const parsed = await checkFusionSolarPeriod(logFile);
-        const logMonth = parsed?.startDate
-          ? new Date(parsed.startDate).getMonth() + 1
-          : new Date().getMonth() + 1;
-        const ghiDay = getMonthlyGHI(gpsCountry || "Vietnam", logMonth) / 30;
-        const dailyGHI = Array.from(
-          { length: parsed?.days || reportDays },
-          () => ghiDay
-        );
-        const rpr = computeRealPerformanceRatio(parsed, dailyGHI, capKWp);
-        const series = computeDailyRPRSeries(parsed, dailyGHI, capKWp);
-        setRealPR(rpr);
-        setDailyRPR(series);
+        const irradiance = projectData?.irradiation || null; // may be null
+        const payload = {
+          records: parse.records,
+          capacity: capKWp,
+          irradiance: irradiance || null,
+        };
+
+        const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/realpr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await r.json();
+        if (!json?.success) {
+          console.error("RPR backend error:", json?.error || json);
+          setRealPR("0.00");
+        } else {
+          const res = json.rpr || json.details || json;
+          // res may be object with RPR field
+          setRealPR(res?.RPR ?? res ?? "0.00");
+          // daily series: if backend does not provide series, keep empty
+          setDailyRPR(res?.series || []);
+        }
       } catch (err) {
         console.error("RPR calc error:", err);
         setRealPR("0.00");
@@ -139,7 +155,7 @@ export default function Report() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logFile, irrFile, capKWp]);
+  }, [state, capKWp]);
 
   const getFontSizeForInverter = (text = "") => {
     const len = text.length;
