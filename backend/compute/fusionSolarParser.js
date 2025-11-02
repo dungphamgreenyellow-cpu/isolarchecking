@@ -1,69 +1,8 @@
-import * as XLSX from "xlsx";
-
-// Auto-detect column names from header
-function detectColumns(header) {
-  let dateCol = header.find(h => /date|time|day/i.test(h));
-  let invCol  = header.find(h => /manage|inverter|device|logger|name/i.test(h));
-  let eacCol  = header.find(h => /e[- ]?day|eac|yield|active energy/i.test(h));
-
-  return { dateCol, invCol, eacCol };
-}
-
-export async function checkFusionSolarPeriod(file) {
-  const buffer = file.data || Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { raw: true });
-
-  if (!rows.length) return { success: false, error: "Empty sheet" };
-
-  const header = Object.keys(rows[0]);
-  const { dateCol, invCol, eacCol } = detectColumns(header);
-
-  if (!dateCol || !invCol || !eacCol)
-    return { success: false, error: "Required columns not found" };
-
-  const daily = {};
-
-  for (const r of rows) {
-    const d = new Date(r[dateCol]);
-    if (isNaN(d.getTime())) continue;
-    const day = d.toISOString().slice(0, 10);
-
-    const inv = (r[invCol] || "Unknown").toString();
-    const eac = Number((r[eacCol] + "").replace(/,/g, ""));
-    if (!Number.isFinite(eac)) continue;
-
-    if (!daily[day]) daily[day] = {};
-    if (!daily[day][inv]) daily[day][inv] = { min: eac, max: eac };
-    daily[day][inv].min = Math.min(daily[day][inv].min, eac);
-    daily[day][inv].max = Math.max(daily[day][inv].max, eac);
-  }
-
-  const dailyProduction = {};
-  for (const day of Object.keys(daily)) {
-    let sum = 0;
-    for (const inv of Object.keys(daily[day])) {
-      sum += daily[day][inv].max - daily[day][inv].min;
-    }
-    dailyProduction[day] = Number(sum.toFixed(3));
-  }
-
-  const days = Object.keys(dailyProduction).sort();
-  return {
-    success: true,
-    dailyProduction,
-    totalProduction: days.reduce((a,b)=>a+dailyProduction[b],0),
-    dayCount: days.length,
-    startDate: days[0] || null,
-    endDate: days.at(-1) || null
-  };
-}
 // backend/compute/fusionSolarParser.js
 // Updated to v9.9-LTS behavior: group by ManageObject (inverter), compute daily Eac delta per inverter, sum across inverters.
 // Date conversion to YYYY-MM-DD uses local timezone (not UTC). Phantom dates like "31/8" are skipped.
 
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import Papa from "papaparse";
 
 // Helper: parse CSV buffer into rows (array of objects)
