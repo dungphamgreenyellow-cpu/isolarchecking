@@ -94,6 +94,14 @@ app.post("/api/compute-rpr", async (req, res) => {
 // === Mount routes (QUAN TRỌNG): bật middleware để req.files hoạt động
 app.use("/api", uploadRoutes);
 app.use("/analysis", analysisRoutes);
+// Global error handler: đảm bảo backend luôn trả JSON khi có lỗi không bắt
+app.use((err, req, res, next) => {
+  console.error("[SERVER ERROR]", err);
+  res.status(500).json({
+    success: false,
+    error: err?.message || "Internal Server Error",
+  });
+});
 // ESM: backend uses "type": "module" in package.json — imports are ES modules
 
 // === Start
