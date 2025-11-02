@@ -86,6 +86,26 @@ function detectColumns(header) {
   return { dateCol, invCol, eacCol };
 }
 
+// Chuẩn hoá ngày & số (helper)
+function toLocalYMD(v) {
+  if (v == null || v === "") return null;
+  const d0 = new Date(v);
+  if (isNaN(d0.getTime())) return null;
+  const d = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate());
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, "0");
+  const dd   = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function toNumber(v) {
+  if (typeof v === "number") return v;
+  if (v == null) return NaN;
+  const s = String(v).replace(/\s+/g,"").replace(/,/g,"");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 // Detect simple phantom date like '31/8' (no year) -> skip
 function isPhantomDate(str) {
   if (!str) return false;
@@ -185,53 +205,48 @@ export async function checkFusionSolarPeriod(file) {
     throw new Error('Failed to parse FusionSolar file: ' + err.message);
   }
 
-  // Map: dateStr -> Map(manageObject -> array of Eac values)
-  const dateMap = new Map();
-  const encounteredDates = new Set();
+  // Build daily min/max per inverter using detected columns
+  // First determine header and columns
+  let header = [];
+  if (filename.toLowerCase().endsWith('.csv')) {
+    header = Object.keys(rows[0] || {});
+  } else {
+    // For XLSX we already populated rows from parseXLSX which used header row index 3
+    // Re-create header from first row keys if available, otherwise keep as empty
+    header = Object.keys(rows[0] || {});
+  }
 
+  const { dateCol, invCol, eacCol } = detectColumns(header);
+  console.log("[parser] cols:", { dateCol, invCol, eacCol });
+
+  const daily = {};
   for (const r of rows) {
-    // pick ManageObject identifier
-    const manageRaw = pickField(r, MANAGE_KEYS) || '';
-    const manage = (''+manageRaw).toString().trim() || 'DEFAULT';
+    const day = toLocalYMD(r[dateCol]);
+    if (!day) continue;
 
-    // pick Eac cumulative value
-    const eacRaw = pickField(r, EAC_KEYS);
-    const eac = eacRaw === undefined || eacRaw === null || eacRaw === '' ? NaN : Number((''+eacRaw).replace(/,/g, '').trim());
+    const inv = (r[invCol] ?? "Unknown").toString().trim();
+    const eac = toNumber(r[eacCol]);
     if (!Number.isFinite(eac)) continue;
 
-    // pick date/time
-    const dateRaw = pickField(r, DATE_KEYS) || pickField(r, ['Date', '日期', 'Day']);
-    const timeRaw = (r['Time'] || r['时间'] || r['时刻']) || '';
-    if (!dateRaw) continue;
-
-    if (isPhantomDate(dateRaw)) continue; // skip phantom entries like '31/8'
-
-    const dateKey = toLocalYYYYMMDD(dateRaw, timeRaw);
-    if (!dateKey) continue;
-
-    encounteredDates.add(dateKey);
-
-    if (!dateMap.has(dateKey)) dateMap.set(dateKey, new Map());
-    const invMap = dateMap.get(dateKey);
-    if (!invMap.has(manage)) invMap.set(manage, []);
-    invMap.get(manage).push(eac);
+    if (!daily[day]) daily[day] = {};
+    if (!daily[day][inv]) daily[day][inv] = { min: eac, max: eac };
+    if (eac < daily[day][inv].min) daily[day][inv].min = eac;
+    if (eac > daily[day][inv].max) daily[day][inv].max = eac;
   }
 
-  // Aggregate per-date: sum over inverters (max-min of Eac per inverter)
+  // Aggregate per-date: sum over inverters (max-min of Eac per inverter), ignore non-positive totals
   const dailyProduction = {};
-  for (const [date, invMap] of dateMap.entries()) {
-    let daySum = 0;
-    for (const [inv, vals] of invMap.entries()) {
-      if (!vals || vals.length === 0) continue;
-      const max = Math.max(...vals);
-      const min = Math.min(...vals);
+  for (const day of Object.keys(daily)) {
+    let sum = 0;
+    for (const inv of Object.keys(daily[day])) {
+      const { min, max } = daily[day][inv];
       const delta = max - min;
-      if (Number.isFinite(delta) && delta >= 0) daySum += delta;
+      if (Number.isFinite(delta) && delta > 0) sum += delta;
     }
-    dailyProduction[date] = Number(daySum.toFixed(3));
+    if (sum > 0) dailyProduction[day] = Number(sum.toFixed(3));
   }
 
-  const datesSorted = Array.from(new Set(Object.keys(dailyProduction))).sort();
+  const datesSorted = Object.keys(dailyProduction).sort();
   const totalProduction = Object.values(dailyProduction).reduce((a,b)=>a+b,0);
 
   return {
