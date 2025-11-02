@@ -230,14 +230,20 @@ export default function HomePage() {
             <button
               onClick={async () => {
                 if (!logFile) return alert("Please upload an Actual Log file first!");
-                const fd = new FormData();
-                fd.append("file", logFile);
-                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/analysis/compute`, {
-                  method: "POST",
-                  body: fd,
-                });
-                const data = await res.json();
-                alert("✅ Cloud Parse OK!\n" + JSON.stringify(data.message || data, null, 2));
+                try {
+                  const fd = new FormData();
+                  fd.append("logfile", logFile);
+                  const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, {
+                    method: "POST",
+                    body: fd,
+                  });
+                  const res = await r.json();
+                  if (!res.success) throw new Error(res.error || "Parse fail");
+                  // navigate to report with parse result
+                  navigate("/report", { state: { parse: res } });
+                } catch (err) {
+                  alert("Cloud parse failed: " + (err.message || err));
+                }
               }}
               className="border border-gray-300 text-gray-700 font-medium px-8 py-3 rounded-xl hover:bg-gray-50 transition"
             >
