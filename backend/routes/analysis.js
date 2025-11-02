@@ -14,10 +14,10 @@ router.post("/compute", async (req, res) => {
     }
 
     const result = await checkFusionSolarPeriod(file);
-    return res.json({ success: true, ...result });
+    return res.json({ success: true, data: result });
 
   } catch (err) {
-    console.error("[compute-error]", err);
+    console.error(err);
     return res.status(500).json({ success: false, error: err?.message || "Lỗi phân tích FusionSolar" });
   }
 });
@@ -32,10 +32,10 @@ router.post("/realpr", async (req, res) => {
     }
     if (!capacity) return res.status(400).json({ success: false, error: "Missing capacity" });
 
-    const parsed = { records };
-    const dailyGHI = irradiance || [];
-    const result = computeRealPerformanceRatio(parsed, dailyGHI, capacity);
-    return res.json({ success: true, rpr: result, details: result });
+  const parsed = { records };
+  const dailyGHI = irradiance || [];
+  const result = computeRealPerformanceRatio(parsed, dailyGHI, capacity);
+  return res.json({ success: true, data: result });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ success: false, error: e?.message });
