@@ -8,20 +8,17 @@ const router = express.Router();
 // POST /analysis/compute
 router.post("/compute", async (req, res) => {
   try {
-    // expect express-fileupload field named 'logfile'
-    if (!req.files || !req.files.logfile) {
-      return res.status(400).json({ success: false, error: "No file uploaded (field 'logfile' expected)" });
+    const file = req.files?.logfile;
+    if (!file) {
+      return res.status(400).json({ success: false, error: "Không tìm thấy file log (logfile)" });
     }
 
-    const file = req.files.logfile; // uploaded file
-    const buffer = file.data;    // file buffer
-
-    const result = await checkFusionSolarPeriod({ name: file.name, data: buffer });
-
+    const result = await checkFusionSolarPeriod(file);
     return res.json({ success: true, ...result });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ success: false, error: e?.message });
+
+  } catch (err) {
+    console.error("[compute-error]", err);
+    return res.status(500).json({ success: false, error: err?.message || "Lỗi phân tích FusionSolar" });
   }
 });
 
