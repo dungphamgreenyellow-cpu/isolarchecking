@@ -67,6 +67,7 @@ export async function checkFusionSolarPeriod(file) {
   }
 
   const header = raw[headerIndex].map(h => (h || "").toString().trim());
+  // Header = row index 3 → dữ liệu phải bắt đầu từ row index 4
   const dataRows = raw.slice(headerIndex + 1);
 
   // Tìm index cột ngày và EAC theo các hằng DATE_KEYS / EAC_KEYS
