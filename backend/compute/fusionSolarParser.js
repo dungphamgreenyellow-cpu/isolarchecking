@@ -4,6 +4,28 @@
 
 import * as XLSX from "xlsx";
 
+const EAC_KEYS = [
+  "Eac",
+  "Eac(kWh)",
+  "E-AC(kWh)",
+  "累计发电量",
+  "Accumulated amount of absorbed electricity(kWh)",
+  "Total yield(kWh)",
+  "Today’s yield(kWh)",
+];
+
+const DATE_KEYS = [
+  "Date",
+  "Day",
+  "Start Time",
+  "StartTime",
+  "日期",
+  "Timestamp",
+  "Time",
+  "Datetime",
+  "Date Time"
+];
+
 function toNumber(v) {
   if (typeof v === "number") return v;
   if (!v) return NaN;
