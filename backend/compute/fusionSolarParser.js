@@ -48,6 +48,11 @@ function toLocalYMD(d) {
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
 }
 
+// Alias for compatibility with incoming snippet
+function toLocalYYYYMMDD(d) {
+  return toLocalYMD(d);
+}
+
 export async function checkFusionSolarPeriod(file) {
   const buffer = file?.data ?? (file?.arrayBuffer ? Buffer.from(await file.arrayBuffer()) : file);
   const wb = XLSX.read(buffer, { type: "buffer" });
@@ -80,20 +85,27 @@ export async function checkFusionSolarPeriod(file) {
     return { success: false, note: "Không tìm thấy cột Date hoặc EAC" };
   }
 
-  const records = dataRows.map(r => {
-    const o = {};
-    header.forEach((col, i) => { o[col] = r[i]; });
-    // Parse theo index yêu cầu
-    const dateRaw = r[dateIndex];
-    const eacRaw = r[eacIndex];
-    o._timestamp = dateRaw ? new Date(dateRaw) : null;
-  const eacVal = toNumber(eacRaw);
-  o._eac = Number.isFinite(eacVal) ? eacVal : 0;
-  o._power = toNumber(o[pCol]);
-  o._inv = normalizeInverter(o[invCol]);
-    o._day = o._timestamp ? toLocalYMD(o._timestamp) : null;
-    return o;
-  });
+  // Build records by iterating rows starting at headerIndex + 1 (row index 4 => data starts at row 5)
+  const invIndex = header.findIndex(h => h.toLowerCase().includes("manageobject") || h.toLowerCase().includes("inverter"));
+  const records = [];
+  for (let i = headerIndex + 1; i < raw.length; i++) {
+    const row = raw[i];
+    if (!row || row.length === 0) continue;
+
+    const dateVal = row[dateIndex] || row[dateIndex - 1] || row[dateIndex + 1];
+    if (!dateVal) continue;
+    const dateKey = toLocalYYYYMMDD(dateVal);
+    if (!dateKey) continue;
+
+    const invRaw = row[invIndex] || "";
+    const inv = normalizeInverter(invRaw);
+
+    const eacVal = row[eacIndex];
+    const eac = Number(('' + eacVal).replace(/,/g, "").trim());
+    if (!Number.isFinite(eac)) continue;
+
+    records.push({ dateKey, inv, eac });
+  }
 
   // Gom daily = sum(max - min) theo inverter
   const dailyMap = {};
