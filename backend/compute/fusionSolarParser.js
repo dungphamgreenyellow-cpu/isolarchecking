@@ -4,6 +4,14 @@
 
 import * as XLSX from "xlsx";
 
+function normalizeInverter(obj) {
+  if (!obj) return "Unknown";
+  let name = obj.toString();
+  if (name.includes("/")) name = name.split("/")[1];
+  if (name.includes("(")) name = name.split("(")[0];
+  return name.trim();
+}
+
 const EAC_KEYS = [
   "Eac",
   "Eac(kWh)",
@@ -78,10 +86,10 @@ export async function checkFusionSolarPeriod(file) {
     const dateRaw = r[dateIndex];
     const eacRaw = r[eacIndex];
     o._timestamp = dateRaw ? new Date(dateRaw) : null;
-    const eacVal = toNumber(eacRaw);
-    o._eac = Number.isFinite(eacVal) ? eacVal : 0;
-    o._power = toNumber(o[pCol]);
-    o._inv = (o[invCol] || "Unknown").toString().trim();
+  const eacVal = toNumber(eacRaw);
+  o._eac = Number.isFinite(eacVal) ? eacVal : 0;
+  o._power = toNumber(o[pCol]);
+  o._inv = normalizeInverter(o[invCol]);
     o._day = o._timestamp ? toLocalYMD(o._timestamp) : null;
     return o;
   });
