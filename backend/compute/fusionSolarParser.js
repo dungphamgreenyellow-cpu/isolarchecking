@@ -43,33 +43,44 @@ function toLocalYMD(d) {
 export async function checkFusionSolarPeriod(file) {
   const buffer = file?.data ?? (file?.arrayBuffer ? Buffer.from(await file.arrayBuffer()) : file);
   const wb = XLSX.read(buffer, { type: "buffer" });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
+  // Chọn sheet: ưu tiên tên có "Plant" hoặc "Logger", nếu không có thì sheet đầu tiên
+  const sheetName = wb.SheetNames.find(n => /plant/i.test(n) || /logger/i.test(n)) || wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
   const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
   if (!raw || raw.length < 2) {
     return { success: true, records: [], dailyProduction: {}, monthlyProduction: {}, totalProduction: 0, dayCount: 0, startDate: null, endDate: null, inverterList: [], note: "Sheet trống" };
   }
 
-  // Tìm dòng header chứa "Start Time"
-  const headerIndex = raw.findIndex(r => r.some(v => typeof v === "string" && v.toLowerCase().includes("start time")));
-  if (headerIndex === -1) {
-    return { success: true, records: [], dailyProduction: {}, monthlyProduction: {}, totalProduction: 0, dayCount: 0, startDate: null, endDate: null, inverterList: [], note: "Không tìm thấy header" };
+  // Header nằm ở dòng 4 (zero-index = 3)
+  const headerIndex = 3;
+  if (!raw || raw.length <= headerIndex) {
+    return { success: true, records: [], dailyProduction: {}, monthlyProduction: {}, totalProduction: 0, dayCount: 0, startDate: null, endDate: null, inverterList: [], note: "Sheet trống" };
   }
 
   const header = raw[headerIndex].map(h => (h || "").toString().trim());
   const dataRows = raw.slice(headerIndex + 1);
 
-  const dateCol = header.find(h => DATE_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
+  // Tìm index cột ngày và EAC theo các hằng DATE_KEYS / EAC_KEYS
+  const dateIndex = header.findIndex(h => DATE_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
   const invCol = header.find(h => h.toLowerCase().includes("manageobject") || h.toLowerCase().includes("inverter"));
-  const eacCol = header.find(h => EAC_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
+  const eacIndex = header.findIndex(h => EAC_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
   const pCol = header.find(h => h.toLowerCase().includes("active power"));
+
+  if (dateIndex === -1 || eacIndex === -1) {
+    return { success: false, note: "Không tìm thấy cột Date hoặc EAC" };
+  }
 
   const records = dataRows.map(r => {
     const o = {};
     header.forEach((col, i) => { o[col] = r[i]; });
-    o._timestamp = o[dateCol] ? new Date(o[dateCol]) : null;
+    // Parse theo index yêu cầu
+    const dateRaw = r[dateIndex];
+    const eacRaw = r[eacIndex];
+    o._timestamp = dateRaw ? new Date(dateRaw) : null;
+    const eacVal = toNumber(eacRaw);
+    o._eac = Number.isFinite(eacVal) ? eacVal : 0;
     o._power = toNumber(o[pCol]);
-    o._eac = toNumber(o[eacCol]);
     o._inv = (o[invCol] || "Unknown").toString().trim();
     o._day = o._timestamp ? toLocalYMD(o._timestamp) : null;
     return o;
