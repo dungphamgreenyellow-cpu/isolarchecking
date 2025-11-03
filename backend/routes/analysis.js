@@ -1,5 +1,6 @@
 // backend/routes/analysis.js
 import express from "express";
+import path from "path";
 import { checkFusionSolarPeriod } from "../compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
 
@@ -43,3 +44,34 @@ router.post("/realpr", async (req, res) => {
 });
 
 export default router;
+
+// Routes for uploading test files to backend/test-data (debug helpers)
+router.post("/upload-test-log", async (req, res) => {
+  try {
+    const file = req.files?.logfile;
+    if (!file) return res.status(400).json({ success: false, error: "logfile thiếu" });
+
+    const savePath = path.join(process.cwd(), "backend/test-data/test_FusionSolar.xlsx");
+    await file.mv(savePath);
+
+    return res.json({ success: true, message: "Đã lưu test_FusionSolar.xlsx" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post("/upload-test-pdf", async (req, res) => {
+  try {
+    const file = req.files?.pvsyst;
+    if (!file) return res.status(400).json({ success: false, error: "pvsyst thiếu" });
+
+    const savePath = path.join(process.cwd(), "backend/test-data/test_PVSyst.pdf");
+    await file.mv(savePath);
+
+    return res.json({ success: true, message: "Đã lưu test_PVSyst.pdf" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
