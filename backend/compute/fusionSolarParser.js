@@ -75,59 +75,63 @@ export async function checkFusionSolarPeriod(file) {
   // Header = row index 3 → dữ liệu phải bắt đầu từ row index 4
   const dataRows = raw.slice(headerIndex + 1);
 
-  // Tìm index cột ngày và EAC theo các hằng DATE_KEYS / EAC_KEYS
-  const dateIndex = header.findIndex(h => DATE_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
-  const invCol = header.find(h => h.toLowerCase().includes("manageobject") || h.toLowerCase().includes("inverter"));
-  const eacIndex = header.findIndex(h => EAC_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
-  const pCol = header.find(h => h.toLowerCase().includes("active power"));
+  // Tìm index cột ngày và EAC theo chuẩn FusionSolar v9.9-LTS
+  // Header matching: Start Time và Accumulated amount of absorbed electricity(kWh)
+  const dateIndex = header.findIndex(h => (h || "").toLowerCase().includes("start time"));
+  const eacIndex = header.findIndex(h => (h || "").toLowerCase().includes("accumulated amount of absorbed electricity(kwh)"));
+  const invIndex = header.findIndex(h => (h || "").toLowerCase().includes("manageobject"));
 
   if (dateIndex === -1 || eacIndex === -1) {
-    return { success: false, note: "Không tìm thấy cột Date hoặc EAC" };
+    return { success: false, note: "Không tìm thấy cột Start Time hoặc Accumulated EAC" };
   }
 
-  // Build records by iterating rows starting at headerIndex + 1 (row index 4 => data starts at row 5)
-  const invIndex = header.findIndex(h => h.toLowerCase().includes("manageobject") || h.toLowerCase().includes("inverter"));
-  const records = [];
-  for (let i = headerIndex + 1; i < raw.length; i++) {
-    const row = raw[i];
+  // Build compactRecords: dateKey = YYYY-MM-DD (local), inverter = INV-<serial>, eac = numeric
+  const compactRecords = [];
+  for (let r = headerIndex + 1; r < raw.length; r++) {
+    const row = raw[r];
     if (!row || row.length === 0) continue;
 
-    const dateVal = row[dateIndex] || row[dateIndex - 1] || row[dateIndex + 1];
+    // read date value from the Start Time column
+    const dateVal = row[dateIndex];
     if (!dateVal) continue;
-    const dateKey = toLocalYYYYMMDD(dateVal);
-    if (!dateKey) continue;
+    const dayKey = toLocalYMD(new Date(dateVal));
+    if (!dayKey) continue;
 
-    const invRaw = row[invIndex] || "";
-    const inv = normalizeInverter(invRaw);
+    // inverter serial: take part before '/' and format INV-<serial>
+    const invRaw = (invIndex !== -1 ? (row[invIndex] || "") : "") + "";
+    const serial = invRaw.split("/")[0].trim();
+    const inverter = serial ? `INV-${serial}` : "INV-Unknown";
 
-    const eacVal = row[eacIndex];
-    const eac = Number(('' + eacVal).replace(/,/g, "").trim());
-    if (!Number.isFinite(eac)) continue;
+    // parse EAC numeric
+    const eacRaw = row[eacIndex];
+    const e = Number(('' + (eacRaw ?? '')).replace(/,/g, '').trim());
+    if (!Number.isFinite(e)) continue;
 
-    records.push({ dateKey, inv, eac });
+    compactRecords.push({ dateKey: dayKey, inverter, eac: Number(e) });
   }
 
-  // Gom daily = sum(max - min) theo inverter
-  const dailyMap = {};
-  const invSet = new Set();
-  for (const r of records) {
-    if (!r._day || !Number.isFinite(r._eac)) continue;
-    invSet.add(r._inv);
-    dailyMap[r._day] ??= {};
-    const rec = dailyMap[r._day][r._inv] ?? { min: r._eac, max: r._eac };
-    if (r._eac < rec.min) rec.min = r._eac;
-    if (r._eac > rec.max) rec.max = r._eac;
-    dailyMap[r._day][r._inv] = rec;
+  // Aggregate dailyProduction per inverter
+  const dailyMap = {}; // { dayStr: { INV-xxx: {min, max} } }
+  const inverterSet = new Set();
+  for (const r of compactRecords) {
+    const day = r.dateKey; // already YYYY-MM-DD local
+    if (!day) continue;
+    inverterSet.add(r.inverter);
+    dailyMap[day] ??= {};
+    const invObj = dailyMap[day][r.inverter] ?? { min: r.eac, max: r.eac };
+    if (r.eac < invObj.min) invObj.min = r.eac;
+    if (r.eac > invObj.max) invObj.max = r.eac;
+    dailyMap[day][r.inverter] = invObj;
   }
 
-  const dailyProduction = {};
-  for (const d of Object.keys(dailyMap)) {
-    let s = 0;
-    for (const inv in dailyMap[d]) {
-      const { min, max } = dailyMap[d][inv];
-      if (max > min) s += (max - min);
+  const dailyProduction = {}; // day -> sum of (max-min) across inverters
+  for (const day of Object.keys(dailyMap).sort()) {
+    let sum = 0;
+    for (const inv of Object.keys(dailyMap[day])) {
+      const { min, max } = dailyMap[day][inv];
+      if (max > min) sum += (max - min);
     }
-    if (s > 0) dailyProduction[d] = Number(s.toFixed(3));
+    if (sum > 0) dailyProduction[day] = Number(sum.toFixed(3));
   }
 
   const monthlyProduction = {};
@@ -139,15 +143,33 @@ export async function checkFusionSolarPeriod(file) {
   const days = Object.keys(dailyProduction).sort();
   const totalProduction = Number(Object.values(dailyProduction).reduce((a, b) => a + b, 0).toFixed(3));
 
-  return {
-    success: true,
-    records,
+  // session store in-memory with TTL 45 minutes
+  const sessionId = `sess-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  const inverterList = [...inverterSet].sort();
+  // Ensure a module-level memoryStore exists
+  if (typeof globalThis.__fusionMemoryStore === 'undefined') globalThis.__fusionMemoryStore = {};
+  globalThis.__fusionMemoryStore[sessionId] = {
+    compactRecords,
     dailyProduction,
     monthlyProduction,
+    inverterList,
+    createdAt: Date.now()
+  };
+  // TTL remove
+  setTimeout(() => { delete globalThis.__fusionMemoryStore[sessionId]; }, 45 * 60 * 1000);
+
+  return {
+    success: true,
+    sessionId,
+    inverterList,
     totalProduction,
     dayCount: days.length,
     startDate: days[0] || null,
     endDate: days.at(-1) || null,
-    inverterList: [...invSet]
+    note: compactRecords.length ? "Parsed OK" : "Sheet trống"
   };
+}
+
+export function getFusionSession(id) {
+  return (globalThis.__fusionMemoryStore || {})[id] || null;
 }
