@@ -59,9 +59,9 @@ export async function checkFusionSolarPeriod(file) {
   const header = raw[headerIndex].map(h => (h || "").toString().trim());
   const dataRows = raw.slice(headerIndex + 1);
 
-  const dateCol = header.find(h => h.toLowerCase().includes("start time"));
+  const dateCol = header.find(h => DATE_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
   const invCol = header.find(h => h.toLowerCase().includes("manageobject") || h.toLowerCase().includes("inverter"));
-  const eacCol = header.find(h => h.toLowerCase().includes("total yield"));
+  const eacCol = header.find(h => EAC_KEYS.some(k => (h || "").toString().toLowerCase().includes(k.toLowerCase())));
   const pCol = header.find(h => h.toLowerCase().includes("active power"));
 
   const records = dataRows.map(r => {
