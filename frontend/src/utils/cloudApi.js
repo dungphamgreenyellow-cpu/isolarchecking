@@ -1,4 +1,5 @@
-console.log("🌐 [cloudApi] Backend URL:", import.meta.env.VITE_API_BASE_URL);
+console.warn("[cloudApi] Legacy path in use; prefer direct /analysis endpoints. Using VITE_BACKEND_URL.");
+console.log("🌐 [cloudApi] Backend URL:", import.meta.env.VITE_BACKEND_URL);
 
 export async function analyzeOnCloud({ logFile, irrFile, pvsystFile, extras = {} }) {
   if (!logFile) throw new Error("Missing required logFile");
@@ -9,7 +10,7 @@ export async function analyzeOnCloud({ logFile, irrFile, pvsystFile, extras = {}
   if (pvsystFile) fd.append("pvsystFile", pvsystFile);
   Object.entries(extras).forEach(([k, v]) => fd.append(k, String(v)));
 
-  const url = `${import.meta.env.VITE_API_BASE_URL}/api/parse-fusion`;
+  const url = `${import.meta.env.VITE_BACKEND_URL}/api/parse-fusion`;
 
   const response = await fetch(url, {
     method: "POST",

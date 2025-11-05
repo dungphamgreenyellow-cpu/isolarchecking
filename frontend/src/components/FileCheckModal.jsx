@@ -6,22 +6,6 @@
 
 import React, { useEffect, useState } from "react";
 import { checkFusionSolarPeriod } from "../utils/fusionSolarParser";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
-// Helper đọc text PDF nhanh
-async function readPDFText(file) {
-  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-  let text = "";
-  for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    text += content.items.map((t) => t.str).join(" ") + "\n";
-  }
-  return text.replace(/\s+/g, " ").trim();
-}
 
 export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onNext }) {
   const [checking, setChecking] = useState(false);
@@ -40,16 +24,9 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       }
 
       if (pvsystFile) {
-        try {
-          const text = await readPDFText(pvsystFile);
-          const ok = /Simulation|PVSystem|Report|Project/i.test(text);
-          pvRes = {
-            valid: ok,
-            message: ok ? "PVSyst PDF detected" : "Invalid or unreadable PDF",
-          };
-        } catch {
-          pvRes = { valid: false, message: "Error parsing PDF" };
-        }
+        // Không parse PDF ở FE nữa — chỉ kiểm tra basic theo phần mở rộng
+        const ok = /\.pdf$/i.test(pvsystFile.name || "");
+        pvRes = { valid: ok, message: ok ? "PVSyst PDF detected" : "Invalid PDF" };
       }
 
       setLogResult(logRes);

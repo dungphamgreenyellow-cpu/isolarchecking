@@ -8,9 +8,9 @@ import path from "path";
 import uploadRoutes from "./routes/upload.js";
 import analysisRoutes from "./routes/analysis.js";
 
-import { checkFusionSolarPeriod } from "./compute/fusionSolarParser.js";
+import { streamParseAndCompute } from "./compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
-import { parsePVSystPDF } from "./compute/parsePVSyst.js";
+import { parsePVSyst } from "./compute/parsePVSyst.js";
 
 const app = express();
 // ✅ Khuyến nghị: auto PORT từ Render/host, có fallback để chạy local
@@ -33,13 +33,13 @@ app.use(
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-app.use(express.json({ limit: "200mb" }));
-app.use(express.urlencoded({ extended: true, limit: "200mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // === Healthcheck
 app.get("/", (_req, res) => {
@@ -53,7 +53,7 @@ app.post("/api/parse-pvsyst", async (req, res) => {
       return res.status(400).json({ error: "No PDF uploaded" });
     }
     const buffer = req.files.file.data; // <-- quan trọng: buffer từ express-fileupload
-    const info = await parsePVSystPDF(buffer);
+    const info = await parsePVSyst(buffer);
     return res.json({ success: true, data: info });
   } catch (err) {
     console.error("❌ parse-pvsyst error:", err);
@@ -67,9 +67,9 @@ app.post("/api/parse-fusion", async (req, res) => {
     if (!req.files || !req.files.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const f = req.files.file;
-    const parsed = await checkFusionSolarPeriod(f);
-    return res.json({ success: true, ...parsed });
+  const f = req.files.file;
+  const parsed = await streamParseAndCompute(f.data);
+  return res.json({ success: true, data: parsed });
   } catch (err) {
     console.error("parse-fusion error:", err);
     return res.status(500).json({ success: false, error: err.message });

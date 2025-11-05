@@ -15,10 +15,16 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
 
   useEffect(() => {
     if (!open) return;
-    setForm((prev) => ({
-      ...prev,
-      ...initialData,
-    }));
+    setForm({
+      siteName: initialData?.siteName || "",
+      installed: initialData?.capacity || initialData?.installed || "",
+      location: initialData?.location || "",
+      cod: initialData?.cod || "",
+      module: initialData?.pvModule || initialData?.module || "",
+      inverter: initialData?.inverter || "",
+      tempCoeff: "0.34",
+      degr: "0.5",
+    });
   }, [open, initialData]);
 
   if (!open) return null;

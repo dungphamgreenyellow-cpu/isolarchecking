@@ -1,19 +1,46 @@
-# iSolarChecking — Render AutoPass v4.1 FINAL
+# iSolarChecking
 
-This package is productionized for Render ZIP Upload:
-- Backend (Express) serves built frontend (Vite) from `backend/public`.
-- All calculations run on backend via `/api/*`.
+End-to-end tool to analyze FusionSolar/iSolarCloud logs and generate a clean performance report. The frontend is a lightweight React app; the backend does all heavy work: parsing FusionSolar CSV, parsing PVSyst PDF, and computing Real Performance Ratio (RPR).
 
-## Deploy (ZIP Upload on Render)
-1) Create new Web Service → Runtime: Node
+- Frontend: React + Vite (upload UI, confirm modal, report)
+- Backend: Node.js + Express (CSV/PDF parsing, RPR compute, JSON APIs)
+
+Quick links:
+- Architecture: `docs/ARCHITECTURE.md`
+- API Spec: `docs/API.md`
+- CSV Format & Rules: `docs/CSV_FORMAT.md`
+
+## Quick start (local)
+
+Backend:
+
+```
+cd backend
+npm install
+node index.js
+# server on http://localhost:3001
+```
+
+Frontend (dev):
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+Try the CSV endpoint with the sample:
+
+```
+curl -sS -X POST -F 'logfile=@backend/test-data/test_FusionSolar.csv' http://localhost:3001/analysis/compute | jq '.'
+```
+
+## Deploy (Render ZIP)
+1) Create a new Web Service (Node)
 2) Upload this ZIP
-3) Render will:
-   - `npm ci` in backend
+3) Render steps:
+   - install backend deps
    - build frontend and copy to `backend/public`
-   - `npm start` backend
+   - start backend (uses `process.env.PORT`)
 
-You do not need to set a PORT; Render provides it. The server uses `process.env.PORT || 8080`.
-
-## Local
-cd backend && npm ci && npm run build:frontend && npm start
-open http://localhost:8080
+See `docs/ARCHITECTURE.md` for details, contracts and flows.

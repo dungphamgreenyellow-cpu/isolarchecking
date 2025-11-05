@@ -1,25 +1,23 @@
 // backend/routes/analysis.js
 import express from "express";
 import path from "path";
-import { checkFusionSolarPeriod } from "../compute/fusionSolarParser.js";
+import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
+import { parsePVSyst } from "../compute/parsePVSyst.js";
 
 const router = express.Router();
 
 // POST /analysis/compute
 router.post("/compute", async (req, res) => {
+  const t0 = process.hrtime.bigint();
   try {
     const file = req.files?.logfile;
-    if (!file) {
-      return res.status(400).json({ success: false, error: "Không tìm thấy file log (logfile)" });
-    }
-
-    const result = await checkFusionSolarPeriod(file);
-    return res.json({ success: true, data: result });
-
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ success: false, error: err?.message || "Lỗi phân tích FusionSolar" });
+    if (!file?.data) return res.status(400).json({ success: false, error: "No logfile uploaded" });
+    const result = await streamParseAndCompute(file.data);
+    const t1 = process.hrtime.bigint();
+    return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
   }
 });
 
@@ -51,10 +49,10 @@ router.post("/upload-test-log", async (req, res) => {
     const file = req.files?.logfile;
     if (!file) return res.status(400).json({ success: false, error: "logfile thiếu" });
 
-    const savePath = path.join(process.cwd(), "backend/test-data/test_FusionSolar.xlsx");
+    const savePath = path.join(process.cwd(), "backend/test-data/test_FusionSolar.csv");
     await file.mv(savePath);
 
-    return res.json({ success: true, message: "Đã lưu test_FusionSolar.xlsx" });
+    return res.json({ success: true, message: "Đã lưu test_FusionSolar.csv" });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, error: err.message });
@@ -72,6 +70,19 @@ router.post("/upload-test-pdf", async (req, res) => {
     return res.json({ success: true, message: "Đã lưu test_PVSyst.pdf" });
   } catch (err) {
     console.error(err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Optional mirror endpoint: POST /analysis/parse-pvsyst
+router.post("/parse-pvsyst", async (req, res) => {
+  try {
+    const file = req.files?.pvsyst || req.files?.file;
+    if (!file?.data) return res.status(400).json({ success: false, error: "No PDF uploaded" });
+    const info = await parsePVSyst(file.data);
+    return res.json({ success: true, data: info });
+  } catch (err) {
+    console.error("parse-pvsyst error:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -36,7 +36,10 @@ function todayStr() {
 }
 
 export default function Report() {
-  const { state } = useLocation();
+  const location = useLocation();
+  const { state } = location;
+  const parsedRecordsCount = location.state?.parsedRecordsCount || 0;
+  const rprData = location.state?.rpr || null;
   const projectData = state?.projectData;
   const files = state?.files || {};
   const logFile = files?.logFile || null;
@@ -68,6 +71,9 @@ export default function Report() {
     days,
     gpsCountry,
   } = projectData;
+
+  console.log("[DEBUG] Report received parsedRecordsCount:", parsedRecordsCount);
+  console.log("[DEBUG] Report received rprData:", rprData);
 
   // === Auto baseline GHI based on log month ===
   React.useEffect(() => {
@@ -238,7 +244,7 @@ export default function Report() {
         </div>
       </div>
 
-      {/* === SUMMARY === */}
+        {/* === SUMMARY === */}
       <div className="w-full max-w-[850px] bg-[#F9FBFF] rounded-lg shadow p-6 mb-6 mt-5">
         <h2 className="text-lg font-semibold mb-4 text-gray-700">
           Summary &amp; Performance Trend
@@ -331,6 +337,12 @@ export default function Report() {
           </p>
         )}
       </div>
+
+      {rprData !== null && (
+        <div className="mt-4 text-sm text-gray-600">
+          Advanced Analysis Enabled • RPR: {rprData.RPR ? rprData.RPR.toFixed(2) + "%" : "N/A"}
+        </div>
+      )}
 
       {/* === FOOTER === */}
       <div className="w-full max-w-[850px] flex justify-end pr-3 mt-auto mb-4">

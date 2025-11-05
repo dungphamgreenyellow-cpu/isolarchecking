@@ -10,7 +10,7 @@ import { uploadLog } from "../api";
 import { setSessionId } from "../sessionStore";
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
-import { analyzeOnCloud } from "../utils/cloudApi";
+import WorkerUrl from "../workers/fsXlsxWorker?worker";
 
 // === Quick helper ===
 function inferCountryFromLocation(str = "") {
@@ -31,7 +31,7 @@ function TestBackendButton() {
   const pingCloud = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/`);
+  const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/`);
       const text = await res.text();
       setReply("✅ " + text);
     } catch (err) {
@@ -63,6 +63,51 @@ export default function HomePage() {
   const [projectData, setProjectData] = useState({});
   const [fileCheckOpen, setFileCheckOpen] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [error, setError] = useState(null);
+  const [parsedRecords, setParsedRecords] = useState(null);
+
+  async function parseFullXLSXInWorker(file) {
+    return new Promise((resolve, reject) => {
+      try {
+        const worker = new WorkerUrl();
+        worker.onmessage = (e) => {
+          if (e.data?.error) reject(new Error(e.data.error));
+          else resolve(e.data);
+          worker.terminate();
+        };
+        const reader = new FileReader();
+        reader.onload = () => worker.postMessage(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read XLSX as ArrayBuffer"));
+        reader.readAsArrayBuffer(file);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // STEP 4 — AUTO OPEN CONFIRM MODAL WHEN PARSE SUCCESS
+  const handleStartAnalyze = async () => {
+    setChecking(true);
+    const fd = new FormData();
+    fd.append("logfile", logFile);
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, { method: "POST", body: fd });
+      const json = await res.json();
+      if (!json.success || json.data?.note) {
+        setChecking(false);
+        return setError(json.data?.note || "Parsing failed.");
+      }
+
+      setProjectData(json.data);
+      setModalOpen(true); // ✅ AUTO NEXT (no click)
+      setError(null);
+    } catch (e) {
+      setError("Network error.");
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const handleStart = () => {
     if (!logFile) {
@@ -83,7 +128,7 @@ export default function HomePage() {
       if (pvsystFile) {
         const fd = new FormData();
         fd.append("file", pvsystFile);
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/parse-pvsyst`, {
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/parse-pvsyst`, {
           method: "POST",
           body: fd,
         });
@@ -91,29 +136,11 @@ export default function HomePage() {
         autoInfo = json?.data || {};
       }
 
-      // ✅ Cloud Compute
-      let cloudResult = null;
-      try {
-        cloudResult = await analyzeOnCloud({
-          logFile,
-          irrFile,
-          pvsystFile,
-          extras: { gpsCountry: autoInfo?.location || "Vietnam" },
-        });
-      } catch (e) {
-        console.warn("⚠️ Cloud compute failed:", e.message);
-      }
-
       const merged = {
         ...autoInfo,      // from PVSyst
         ...parsedData,    // quick parse from FileCheckModal
-        actualProduction:
-          cloudResult?.summary?.totalEac ?? parsedData?.totalProduction ?? 0,
-        dailyProduction:
-          cloudResult?.charts?.dailyProd ?? parsedData?.dailyProduction ?? [],
-        rpr: cloudResult?.summary?.RPR ?? null,
-        cloudMeta: cloudResult?.meta ?? null,
-        cloudDebug: cloudResult?.debug ?? null,
+        actualProduction: parsedData?.totalProduction ?? 0,
+        dailyProduction: parsedData?.dailyProduction ?? [],
       };
 
       setProjectData(merged);
@@ -127,52 +154,56 @@ export default function HomePage() {
     }
   };
 
-  const handleConfirm = (manualInfo) => {
-    (async () => {
-      const gpsCountry =
-        manualInfo?.country ||
-        manualInfo?.nation ||
-        inferCountryFromLocation(manualInfo?.location || projectData?.location);
+  async function handleConfirm() {
+    try {
+      if (!logFile) throw new Error("Please upload a FusionSolar log file.");
 
-      const merged = {
-        ...projectData,
-        ...manualInfo,
-        logFileName: logFile?.name,
-        gpsCountry: gpsCountry || "Vietnam",
-      };
-
-      // Gọi backend parse ở bước xác nhận (Start Analyze)
-      try {
-        const fd = new FormData();
-        fd.append("logfile", logFile);
-        const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, {
-          method: "POST",
-          body: fd,
-        });
-        const res = await r.json();
-        if (!res?.success) {
-          console.error("Parse failed:", res);
-          // fallback: navigate vẫn với merged nhưng báo lỗi
-          navigate("/report", { state: { projectData: merged, files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null } } });
-          return;
-        }
-
-        // nếu parse thành công, chuyển sang Report với parse result + metadata từ merged
-        navigate("/report", {
-          state: {
-            parse: res,
-            projectData: merged,
-            files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null },
-            extras: { capacity: manualInfo?.capacity, gamma: manualInfo?.gamma, degradation: manualInfo?.degradation }
-          },
-        });
-      } catch (err) {
-        console.error("Parse request failed:", err);
-        // fallback: navigate anyway
-        navigate("/report", { state: { projectData: merged, files: { logFile, irrFile: irrFile || null, pvsystFile: pvsystFile || null } } });
+      let parsed = null;
+      if (logFile && /\.xlsx?$/i.test(logFile.name)) {
+        parsed = await parseFullXLSXInWorker(logFile);
+        setParsedRecords(parsed.records || null);
+        console.log("[DEBUG] Parsed XLSX records:", parsed.records?.length);
       }
-    })();
-  };
+
+      // Existing compute call (kept)
+      const fd = new FormData();
+      fd.append("logfile", logFile);
+      if (pvsystFile) fd.append("pvsyst", pvsystFile);
+      const computeRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, { method: "POST", body: fd });
+      const computeJson = await computeRes.json();
+  console.log("[DEBUG] Compute result:", computeJson);
+
+      // RPR using FULL records with capacity if available
+      let rprJson = null;
+      if (parsed?.records?.length) {
+        const capacity = (
+          (projectData?.capacity && typeof projectData.capacity === 'number')
+            ? projectData.capacity
+            : (projectData?.capacity?.dc_kWp || projectData?.capacity?.ac_kW || 0)
+        );
+        const rprRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/realpr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records: parsed.records, capacity })
+        });
+        try { rprJson = await rprRes.json(); } catch {}
+        console.log("[DEBUG] RPR result:", rprJson);
+      }
+
+      console.log("[DEBUG] Navigating to report with data:", {
+        hasParsedRecords: !!parsed?.records?.length,
+        parsedRecordsCount: parsed?.records?.length,
+        compute: computeJson,
+        rpr: rprJson?.data
+      });
+      navigate("/report", { state: { ...computeJson, rpr: rprJson?.data, parsedRecordsCount: parsed?.rows || 0 } });
+    } catch (err) {
+      console.error("Confirm failed:", err);
+      alert(err.message || "Failed to analyze file.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-gradient-to-b from-blue-50 to-white text-gray-800">

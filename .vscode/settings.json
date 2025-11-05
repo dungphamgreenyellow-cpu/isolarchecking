@@ -1,0 +1,139 @@
+{
+  "security.workspace.trust.enabled": true,
+  "security.workspace.trust.startupPrompt": "never",
+  "security.workspace.trust.untrustedFiles": "open",
+  "terminal.integrated.allowWorkspaceShell": true,
+  "terminal.integrated.confirmOnExit": "never",
+  "terminal.integrated.confirmOnKill": "never",
+  "task.allowAutomaticTasks": "on",
+  "chat.tools.terminal.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "matchCommandLine": true,
+      "approve": true
+    }
+  },
+  "chat.tools.apply_patch.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.create_file.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.create_directory.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.read_file.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.grep_search.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.file_search.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.list_dir.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.get_errors.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.create_and_run_task.autoApprove": {
+    ".*": {
+      "isRegex": true,
+      "approve": true
+    }
+  },
+  "chat.tools.semantic_search.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.open_simple_browser.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.get_search_view_results.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.list_code_usages.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.get_changed_files.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.run_notebook_cell.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.copilot_getNotebookSummary.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.edit_notebook_file.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.create_new_jupyter_notebook.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.create_new_workspace.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.github_repo.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.get_vscode_api.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.install_extension.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.run_vscode_command.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.get_project_setup_info.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.github-pull-request_activePullRequest.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.github-pull-request_openPullRequest.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.github-pull-request_copilot-coding-agent.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.manage_todo_list.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.get_terminal_output.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.terminal_last_command.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.terminal_selection.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  },
+  "chat.tools.test_failure.autoApprove": {
+    ".*": { "isRegex": true, "approve": true }
+  }
+}

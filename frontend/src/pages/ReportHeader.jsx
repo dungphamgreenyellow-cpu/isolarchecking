@@ -1,9 +1,4 @@
 import React, { useEffect, useState } from "react";
-import * as XLSX from "xlsx";
-import * as pdfjsLib from "pdfjs-dist";
-
-// Config worker cho pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export default function ReportHeader({ pdfFile, excelFile }) {
   const [data, setData] = useState({
@@ -17,114 +12,9 @@ export default function ReportHeader({ pdfFile, excelFile }) {
     generatedAt: formatDate(new Date()),
   });
 
-  /** ========== PARSE PDF (PVSYST) ========== **/
-  useEffect(() => {
-    const parsePDF = async () => {
-      if (!pdfFile) return;
-      try {
-        const buffer = await pdfFile.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  // Bỏ parse PVSyst ở FE — dữ liệu sẽ được backend xử lý khi cần.
 
-        let text = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          text += " " + content.items.map((it) => it.str).join(" ");
-        }
-
-        text = normalizeText(text);
-        console.log("🔍 PDF text preview:", text.slice(0, 400));
-
-        // --- Project Name ---
-        const project =
-          text.match(/Project\s*[:\-]\s*([A-Za-z0-9 .,_\-()\/]+)/i)?.[1] ||
-          text.match(/Name\s*[:\-]\s*([A-Za-z0-9 .,_\-()\/]+)/i)?.[1] ||
-          text.match(/Variant\s*[:\-]\s*([A-Za-z0-9 .,_\-()\/]+?)(?:\s+\d[\d.,]*\s*kWp|$)/i)?.[1] ||
-          pdfFile.name.replace(/\.pdf$/i, "");
-
-        // --- Installed Capacity ---
-        const installed =
-          text.match(/([\d.,]+)\s*kWp\b/i)?.[1]?.replace(",", ".") + " kWp" || "—";
-
-        // --- Module model ---
-        const module =
-          text.match(/\b(JA|LONGI|JINKO|TRINA|RISEN|CANADIAN|HANWHA)[^×]{0,100}×\s*\d+/i)?.[0] ||
-          text.match(/PV\s*Module\s*:?\s*([^(]*?×\s*\d+)/i)?.[1] ||
-          "—";
-
-        // --- Inverter model ---
-        const inverter =
-          text.match(/\b(HUAWEI|SUNGROW|FIMER|GOODWE|SMA|ABB)[^×]{0,100}×\s*\d+/i)?.[0] ||
-          text.match(/Inverter\s*:?\s*([^(]*?×\s*\d+)/i)?.[1] ||
-          "—";
-
-        // --- COD or Simulation Date ---
-        let cod =
-          text.match(/\bCOD\b[:\-]?\s*([\d]{1,2}\s*\w+\s*[\d]{2,4})/i)?.[1] ||
-          text.match(/\bCommission(?:ed)?\s*Date\b[:\-]?\s*(\d{1,2}\s*\w+\s*\d{2,4})/i)?.[1] ||
-          text.match(/Simulation\s*date\s*[:\-]?\s*(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4})/i)?.[1] ||
-          "—";
-        cod = normalizeDate(cod);
-
-        // --- Location / Geographical Site ---
-        const geo =
-          text.match(/Geographical\s*Site\s*([A-Za-z0-9 .,_\-()\/]+)\s+([A-Za-z .,_\-()\/]+)/i) ||
-          text.match(/Site\s*[:\-]\s*([A-Za-z0-9 .,_\-()\/]+)\s*-\s*([A-Za-z .,_\-()\/]+)/i);
-        const location = geo
-          ? `${geo[1].trim()} – ${geo[2].trim()}`
-          : text.match(/Vietnam|Thailand|Indonesia|Philippines|Malaysia/i)?.[0] || "—";
-
-        setData((prev) => ({
-          ...prev,
-          siteName: clean(project),
-          installed: installed !== "undefined kWp" ? installed : "—",
-          module: clean(module),
-          inverter: clean(inverter),
-          cod,
-          location,
-        }));
-      } catch (e) {
-        console.error("❌ PDF parse error:", e);
-      }
-    };
-    parsePDF();
-  }, [pdfFile]);
-
-  /** ========== PARSE EXCEL (Inverter log → period) ========== **/
-  useEffect(() => {
-    const parseExcel = async () => {
-      if (!excelFile) return;
-      try {
-        const buf = await excelFile.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const dates = [];
-
-        wb.SheetNames.forEach((name) => {
-          const ws = wb.Sheets[name];
-          const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          json.flat().forEach((v) => {
-            const d = tryParseDate(v);
-            if (d) dates.push(d);
-          });
-        });
-
-        // fallback: extract from file name like "20250101_20250930"
-        if (!dates.length && excelFile.name.match(/\d{8}/g)) {
-          const matches = excelFile.name.match(/\d{8}/g);
-          matches.forEach((m) => dates.push(tryParseYYYYMMDD(m)));
-        }
-
-        if (dates.length) {
-          const min = new Date(Math.min(...dates));
-          const max = new Date(Math.max(...dates));
-          setData((prev) => ({ ...prev, periodText: formatPeriod(min, max) }));
-        }
-      } catch (err) {
-        console.error("❌ Excel parse error:", err);
-      }
-    };
-    parseExcel();
-  }, [excelFile]);
+  // Removed XLSX-based Excel parsing — backend handles log parsing
 
   /** ========== HELPER FUNCTIONS ========== **/
   function normalizeText(t) {
@@ -145,20 +35,7 @@ export default function ReportHeader({ pdfFile, excelFile }) {
     }
     return txt;
   }
-  function tryParseDate(v) {
-    if (v instanceof Date) return v;
-    if (typeof v === "number" && v > 20000 && v < 90000) {
-      const d = XLSX.SSF.parse_date_code(v);
-      return new Date(d.y, d.m - 1, d.d);
-    }
-    const parsed = tryParseYYYYMMDD(String(v));
-    return parsed;
-  }
-  function tryParseYYYYMMDD(s) {
-    const m = s.match(/(\d{4})(\d{2})(\d{2})/);
-    if (!m) return null;
-    return new Date(+m[1], +m[2] - 1, +m[3]);
-  }
+  // Removed helpers used only by Excel parsing
   function formatDate(d) {
     return `${d.getDate().toString().padStart(2, "0")} ${[
       "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
