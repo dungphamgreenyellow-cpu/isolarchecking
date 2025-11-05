@@ -29,12 +29,15 @@ app.use(
   })
 );
 
-// === CORS mở cho frontend
+// === CORS for Render + local dev
 app.use(
   cors({
-    origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: [
+      "https://isolarchecking.onrender.com",
+      "http://localhost:5173",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
   })
 );
 
