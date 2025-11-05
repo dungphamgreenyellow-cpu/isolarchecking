@@ -37,7 +37,8 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
 
   if (!open) return null;
 
-  const canProceed = logResult?.valid;
+  const ok = logResult?.valid || logResult?.status === "parsed";
+  const canProceed = logResult?.valid; // giữ nguyên điều kiện Next theo yêu cầu chỉ sửa UI
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -51,14 +52,14 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
             <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
               <span className="truncate">📊 Log File: {logFile?.name || "—"}</span>
-              <span>{checking ? "…" : logResult?.valid ? "✅" : "❌"}</span>
+              <span>{checking ? "…" : ok ? "✅" : "❌"}</span>
             </div>
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className={`${
                   checking
                     ? "bg-blue-500 animate-pulse"
-                    : logResult?.valid
+                    : ok
                     ? "bg-green-500"
                     : "bg-red-500"
                 } h-full`}
@@ -70,6 +71,8 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
             <p className="text-xs text-gray-500 mt-1">
               {checking
                 ? "Parsing log..."
+                : logResult?.status === "parsed"
+                ? "Parsed"
                 : logResult?.startDate && logResult?.endDate
                 ? `OK — ${logResult.days} days (${logResult.startDate} → ${logResult.endDate})`
                 : logResult?.message || "Waiting..."}
