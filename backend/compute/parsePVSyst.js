@@ -202,6 +202,7 @@ export async function parsePVSyst(buffer) {
 
   const lines = groupByY(allTokens);
   const textLines = lines.map(tokensToTextLine);
+  const blob = textLines.join("\n");
 
   // 2) PROJECT SUMMARY: latitude/longitude
   let latitude = null, longitude = null;
@@ -212,182 +213,225 @@ export async function parsePVSyst(buffer) {
     if (lonMatch.match) longitude = normalizeNum(lonMatch.match[1]);
   } catch { /* noop */ }
 
-  // 3) SYSTEM SUMMARY
-  const pvArrayBlock = sectionBetween(
-    textLines,
-    ["pv array","system information"],
-    ["inverters","tables on a building","array characteristics","array losses"]
-  );
-  const inverterBlock = sectionBetween(
-    textLines,
-    ["inverters"],
-    ["array losses","pv array characteristics","pv module","legends"]
-  );
+  // 3) SYSTEM SUMMARY — tailored to PVsyst layout observed in sample
+  // Prefer exact regex matches observed in sample before falling back
+  const reModules1 = /Nb\.?\s*of\s*modules\s*([0-9][0-9.,]*)\s*units?/i;
+  const reModules2 = /Number\s+of\s+PV\s+modules\s*([0-9][0-9.,]*)\s*units?/i;
+  const rePnomTotalDC = /Pnom\s+total\s*([0-9][0-9.,]*)\s*kWp/i;
+  const rePnomTotalAC = /Pnom\s+total\s*([0-9][0-9.,]*)\s*kWac\b/i;
+  const reUnits = /Nb\.?\s*of\s*units\s*([0-9][0-9.,]*)\s*units?/i;
+  const reNumInverters = /Number\s+of\s+inverters\s*([0-9][0-9.,]*)\s*units?/i;
+  const rePnomRatio = /Pnom\s+ratio\s*([0-9]+(?:[.,]\d+)?)/i;
 
-  // modules_total
   let modules_total = null;
-  try {
-    const target = pvArrayBlock.find((L) => includesSoft(L, [
-      "nb. of modules","modules number","number of modules","nb. of pv modules","modules"
-    ]));
-    if (target) modules_total = extractFirstNumber(target);
-  } catch { /* noop */ }
-  if (modules_total == null) {
-    // fallback: scan whole doc for modules count lines
-    const any = textLines.find((L) => includesSoft(L, [
-      "nb. of modules","modules number","number of modules","nb. of pv modules","modules"
-    ]));
-    if (any) modules_total = extractFirstNumber(any);
-  }
-
-  // capacity_dc_kwp
   let capacity_dc_kwp = null;
-  try {
-    const target = pvArrayBlock.find((L) => includesSoft(L, [
-      "pnom total","dc power","array power","nominal","stc"
-    ]) && /kwp/i.test(L));
-    if (target) capacity_dc_kwp = normalizeNum(target);
-  } catch { /* noop */ }
-  if (capacity_dc_kwp == null) {
-    // fallback: prefer lines with kWp and context words
-    let cand = textLines.find((L) => /kwp\b/i.test(L) && includesSoft(L, ["pnom total","total power","nominal","stc","dc"]));
-    if (!cand) cand = textLines.find((L) => /kwp\b/i.test(L));
-    if (cand) capacity_dc_kwp = normalizeNum(cand);
-  }
-
-  // inverter_count
   let inverter_count = null;
-  try {
-    const tgt = inverterBlock.find((L) => includesSoft(L, [
-      "nb. of units","number of inverters","inverters"
-    ]) && includesSoft(L, ["inverter","inverters","inv."]));
-    if (tgt) inverter_count = extractFirstNumber(tgt);
-  } catch { /* noop */ }
-  if (inverter_count == null) {
-    const any = textLines.find((L) => includesSoft(L, [
-      "nb. of units","number of inverters","inverters"
-    ]) && includesSoft(L, ["inverter","inverters","inv."]));
-    if (any) inverter_count = extractFirstNumber(any);
-  }
-
-  // capacity_ac_kw
   let capacity_ac_kw = null;
-  try {
-    const tgt = inverterBlock.find((L) => includesSoft(L, [
-      "pnom total","ac power","ac output","total power","kwac","kva","ac rating"
-    ]) && (/(kw\s*ac|kwac|kva|\bak\b)/i.test(L) || includesSoft(L, ["ac"])));
-    if (tgt) capacity_ac_kw = normalizeNum(tgt);
-  } catch { /* noop */ }
+  let dc_ac_ratio = null;
+
+  // Prefer scanning near "System summary" anchor to avoid picking unrelated blocks
+  const sysIdx = textLines.findIndex(L => /\bSystem\s+summary\b/i.test(L));
+  const scanRanges = [];
+  if (sysIdx >= 0) scanRanges.push([Math.max(0, sysIdx - 50), Math.min(textLines.length - 1, sysIdx + 80)]);
+  // also scan window around explicit PV Array / Inverters anchor if present
+  const pvIdx = textLines.findIndex(L => /\bPV\s*Array\b/i.test(L));
+  const invIdx = textLines.findIndex(L => /\bInverters?\b/i.test(L));
+  if (pvIdx >= 0) scanRanges.push([Math.max(0, pvIdx - 30), Math.min(textLines.length - 1, pvIdx + 60)]);
+  if (invIdx >= 0) scanRanges.push([Math.max(0, invIdx - 30), Math.min(textLines.length - 1, invIdx + 60)]);
+
+  const seen = new Set();
+  for (const [a,b] of scanRanges) {
+    const key = `${a}:${b}`; if (seen.has(key)) continue; seen.add(key);
+    for (let i=a;i<=b;i++) {
+      const L = textLines[i];
+      if (modules_total == null) {
+        let m = L.match(reModules1) || L.match(reModules2);
+        if (m) modules_total = normalizeNum(m[1]);
+      }
+      if (capacity_dc_kwp == null) {
+        const m = L.match(rePnomTotalDC);
+        if (m) capacity_dc_kwp = normalizeNum(m[1]);
+      }
+      if (inverter_count == null) {
+        let m = L.match(reUnits) || L.match(reNumInverters);
+        if (m) inverter_count = normalizeNum(m[1]);
+      }
+      if (capacity_ac_kw == null) {
+        const m = L.match(rePnomTotalAC);
+        if (m) capacity_ac_kw = normalizeNum(m[1]);
+      }
+      if (dc_ac_ratio == null) {
+        const m = L.match(rePnomRatio);
+        if (m) dc_ac_ratio = normalizeNum(m[1]);
+      }
+    }
+  }
+  // Fallbacks within blob
+  if (capacity_dc_kwp == null) {
+    const reDCg = new RegExp(rePnomTotalDC.source, 'gi');
+    const all = [...blob.matchAll(reDCg)].map(m => normalizeNum(m[1])).filter(v => v != null);
+    if (all.length) capacity_dc_kwp = Math.max(...all);
+  }
   if (capacity_ac_kw == null) {
-    // fallback: prefer kWac, else kW with AC context
-    let cand = textLines.find((L) => /(kw\s*ac|kwac)/i.test(L));
-    if (!cand) cand = textLines.find((L) => /\bkw\b/i.test(L) && includesSoft(L, ["ac","ac power","ac output","pnom total","total power","inverter"]));
-    if (!cand) cand = textLines.find((L) => /\bkva\b/i.test(L));
-    if (cand) capacity_ac_kw = normalizeNum(cand);
+    const reACg = new RegExp(rePnomTotalAC.source, 'gi');
+    const all = [...blob.matchAll(reACg)].map(m => normalizeNum(m[1])).filter(v => v != null);
+    if (all.length) capacity_ac_kw = Math.max(...all);
+  }
+  const reM1g = new RegExp(reModules1.source, 'gi');
+  const reM2g = new RegExp(reModules2.source, 'gi');
+  if (modules_total == null) {
+    const allA = [...blob.matchAll(reM1g)].map(m => normalizeNum(m[1]));
+    const allB = [...blob.matchAll(reM2g)].map(m => normalizeNum(m[1]));
+    const all = [...allA, ...allB].filter(v => v != null);
+    if (all.length) modules_total = Math.max(...all);
+  }
+  else {
+    // prefer the maximum across the whole document
+    const allA = [...blob.matchAll(reM1g)].map(m => normalizeNum(m[1]));
+    const allB = [...blob.matchAll(reM2g)].map(m => normalizeNum(m[1]));
+    const all = [...allA, ...allB].filter(v => v != null);
+    if (all.length) {
+      const maxV = Math.max(...all);
+      if (maxV > modules_total) modules_total = maxV;
+    }
+  }
+  if (inverter_count == null) {
+    const m = blob.match(reUnits) || blob.match(reNumInverters);
+    if (m) inverter_count = normalizeNum(m[1]);
+  }
+  // Choose most precise and plausible (<=5) Pnom ratio in entire blob, override if present
+  {
+    const rePRg = new RegExp(rePnomRatio.source, 'gi');
+    const allRatios = [...blob.matchAll(rePRg)].map(m => m[1]).filter(x => normalizeNum(x) != null && normalizeNum(x) <= 5);
+    if (allRatios.length) {
+      allRatios.sort((a,b)=>{
+        const fa = (String(a).split(/[.,]/)[1]||'').length;
+        const fb = (String(b).split(/[.,]/)[1]||'').length;
+        return fb - fa; // more decimals first
+      });
+      const precise = normalizeNum(allRatios[0]);
+      if (precise != null) dc_ac_ratio = precise;
+    }
+  }
+  if ((dc_ac_ratio == null || !Number.isFinite(dc_ac_ratio)) && capacity_dc_kwp != null && capacity_ac_kw != null && capacity_ac_kw !== 0) {
+    dc_ac_ratio = Number((capacity_dc_kwp / capacity_ac_kw).toFixed(3));
   }
 
-  // dc_ac_ratio
-  let dc_ac_ratio = null;
+  // 4) PV ARRAY CHARACTERISTICS — models
+  // Directly extract both Model codes if they appear on the same line
+  let module_model = null;
+  let inverter_model = null;
   try {
-    const r = inverterBlock.find((L) => includesSoft(L, ["pnom ratio","dc/ac","dc-ac ratio"]));
-    if (r) dc_ac_ratio = extractFirstNumber(r);
-    if (dc_ac_ratio == null && capacity_dc_kwp != null && capacity_ac_kw != null && capacity_ac_kw !== 0) {
-      dc_ac_ratio = Number((capacity_dc_kwp / capacity_ac_kw).toFixed(3));
+    // Prefer blob-wide extraction to avoid line segmentation issues
+  const models = [...blob.matchAll(/Model\s*([A-Za-z0-9][A-Za-z0-9\-\/\.]{4,}?)(?=Model|\s|$)/ig)].map(m => m[1]);
+    if (models.length) {
+      module_model = models.find(s => !/SUN|KTL|INV|HUAWEI/i.test(s)) || null;
+      inverter_model = models.find(s => /SUN|KTL|INV|HUAWEI/i.test(s)) || null;
+    }
+    if (!(module_model && inverter_model)) {
+      for (const L of textLines) {
+        if (!/\bModel\b/i.test(L)) continue;
+  const all = [...L.matchAll(/Model\s*([A-Za-z0-9][A-Za-z0-9\-\/\.]{4,}?)(?=Model|\s|$)/ig)].map(m => m[1]);
+        if (!module_model && all.length) {
+          const pick = all.find(s => !/SUN|KTL|INV|HUAWEI/i.test(s)) || all[0];
+          if (pick) module_model = pick;
+        }
+        if (!inverter_model && all.length) {
+          const pickInv = all.find(s => /SUN|KTL|INV|HUAWEI/i.test(s));
+          if (pickInv) inverter_model = pickInv;
+        }
+        if (module_model && inverter_model) break;
+      }
+    }
+    // If still missing, search near PV module / Inverter anchors within ±20 lines
+    if (!module_model) {
+      const pvIdx = textLines.findIndex(L => /\bPV\s*module\b/i.test(L));
+      if (pvIdx >= 0) {
+        for (let i = Math.max(0, pvIdx - 20); i <= Math.min(textLines.length - 1, pvIdx + 20); i++) {
+          const m = textLines[i].match(/Model\s+([A-Za-z0-9][A-Za-z0-9\-\/\.]{4,})/i);
+          if (m && !/SUN|KTL|INV|HUAWEI/i.test(m[1])) { module_model = m[1]; break; }
+        }
+      }
+    }
+    if (!inverter_model) {
+      const invIdx = textLines.findIndex(L => /\bInverter\b/i.test(L));
+      if (invIdx >= 0) {
+        for (let i = Math.max(0, invIdx - 20); i <= Math.min(textLines.length - 1, invIdx + 20); i++) {
+          const m = textLines[i].match(/Model\s+([A-Za-z0-9][A-Za-z0-9\-\/\.]{4,})/i);
+          if (m && /SUN|KTL|INV|HUAWEI/i.test(m[1])) { inverter_model = m[1]; break; }
+        }
+      }
     }
   } catch { /* noop */ }
 
-  // 4) PV ARRAY CHARACTERISTICS
-  const pvModuleBlock = sectionBetween(textLines, ["pv module"], ["inverter","array losses","legends"]);
-  const inverterCharBlock = sectionBetween(textLines, ["inverter"], ["array losses","legends"]);
-
-  let module_model = null;
-  let inverter_model = null;
-  try { module_model = pickModelFromBlock(pvModuleBlock) || null; } catch { /* noop */ }
-  try { inverter_model = pickModelFromBlock(inverterCharBlock) || null; } catch { /* noop */ }
-
   // 5) ARRAY LOSSES → soiling
-  const arrayLossBlock = sectionBetween(textLines, ["array losses"], ["legends","balances and main results","normalized productions","performance ratio"]);
   let soiling_loss_percent = null;
   try {
-    const soilingLine = arrayLossBlock.find((L) => includesSoft(L, ["soiling"]));
-    if (soilingLine) {
-      const m = soilingLine.match(/([\d]+(?:[\.,]\d+)?)\s*%/);
+    // Prefer explicit 'Soiling loss' line; fall back to any 'Soiling' with % following or preceding
+    const soilingCand = textLines.find((L) => /Soiling/i.test(L) && /%/.test(L)) ||
+                        textLines.find((L) => /%/.test(L) && /Soiling/i.test(L));
+    if (soilingCand) {
+      const m = soilingCand.match(/([0-9]+(?:[\.,]\d+)?)\s*%/);
+      if (m) soiling_loss_percent = normalizeNum(m[1]);
+    }
+    if (soiling_loss_percent == null) {
+      const m = blob.match(/Soiling[^%]*?([0-9]+(?:[\.,]\d+)?)\s*%/i) || blob.match(/([0-9]+(?:[\.,]\d+)?)\s*%[^\n]*Soiling/i);
       if (m) soiling_loss_percent = normalizeNum(m[1]);
     }
   } catch { /* noop */ }
 
   // 6) BALANCES & MAIN RESULTS — monthly table (12 rows)
-  // split textLines into blocks by empty line
-  const blocks = [];
-  let cur = [];
-  for (const L of textLines) {
-    if (!L || !L.trim()) {
-      if (cur.length) { blocks.push(cur); cur = []; }
-    } else {
-      cur.push(L);
-    }
-  }
-  if (cur.length) blocks.push(cur);
-
-  let bestBlock = null, bestScore = -1, bestIdx = -1;
-  for (let i = 0; i < blocks.length; i++) {
-    const score = monthSignatureScore(blocks[i]);
-    if (score > bestScore) { bestScore = score; bestBlock = blocks[i]; bestIdx = i; }
-  }
-
   let monthly = [];
   try {
-    if (bestBlock && bestScore >= 8) {
-      // detect header line (assume first non-empty before first month row)
-      let firstMonthRow = -1;
-      for (let i = 0; i < bestBlock.length; i++) {
-        const L = bestBlock[i].toLowerCase();
-        const hasMonth = MONTH_FULL.some((m) => L.includes(m)) || MONTH_ABBR.some((a) => L.match(new RegExp(`\\b${a}\\b`))) || MONTH_NUM.some((n) => L.match(new RegExp(`\\b${n}\\b`)));
-        if (hasMonth) { firstMonthRow = i; break; }
-      }
-      // header is line just before the first month row, if any
-      let headerCols = null;
-      if (firstMonthRow > 0) {
-        const header = bestBlock[firstMonthRow - 1];
-        const split = header.split(/\s{2,}/).map((s) => s.trim()).filter(Boolean);
-        if (split.length >= 2) headerCols = split;
-      }
-
-      // map bestBlock rows back into original token lines region (approximate by searching textLines indices)
-      const startGlobal = textLines.indexOf(bestBlock[firstMonthRow]);
-      if (firstMonthRow >= 0 && startGlobal >= 0) {
-        const rows = [];
-        for (let r = 0; r < 12; r++) {
-          const lineIdx = startGlobal + r;
-          if (lineIdx >= 0 && lineIdx < lines.length) rows.push(lines[lineIdx]);
-        }
-        if (rows.length === 12) {
-          for (let r = 0; r < 12; r++) {
-            const cols = splitColumnsByX(rows[r], 8);
-            if (!cols.length) { monthly = []; break; }
-            // first col is month label
-            const monthCell = cols[0] || '';
-            const entry = { month: monthCell };
-            const dataCols = cols.slice(1);
-            if (headerCols && headerCols.length >= dataCols.length) {
-              for (let c = 0; c < dataCols.length; c++) {
-                const key = headerCols[c] || `c${c+1}`;
-                entry[key] = dataCols[c];
-              }
-            } else {
-              for (let c = 0; c < dataCols.length; c++) entry[`c${c+1}`] = dataCols[c];
-            }
-            monthly.push(entry);
-          }
-        } else {
-          monthly = [];
+    // Build a map month->line (first occurrence)
+    const monthLabels = [
+      "January","February","March","April","May","June","July","August","September","October","November","December"
+    ];
+    const monthMap = new Map();
+    for (const L of textLines) {
+      for (const m of monthLabels) {
+        const re = new RegExp(`(^|\\s)${m}`, 'i');
+        if (re.test(L) && !monthMap.has(m)) {
+          monthMap.set(m, L);
         }
       }
+    }
+    if (monthMap.size >= 12) {
+      const keys = ["GlobHor","DiffHor","T_Amb","GlobInc","GlobEff","EArray","E_Grid","PR"];
+      for (const m of monthLabels) {
+        const row = monthMap.get(m);
+        const nums = (row.match(/[+-]?\d+(?:[.,]\d+)?/g) || []).map(x => x.replace(',', '.'));
+        // first token(s) may include year/time; keep the last 8 numbers in the row to align with columns
+        const take = nums.slice(-8);
+        const entry = { month: m };
+        for (let i = 0; i < take.length && i < keys.length; i++) entry[keys[i]] = take[i];
+        monthly.push(entry);
+      }
+    } else {
+      monthly = [];
     }
   } catch (e) {
     console.debug("[PVSyst] monthly parse warn:", e?.message);
     monthly = [];
   }
+
+  // Latitude/Longitude enhancements: detect with cardinal signs as fallback
+  try {
+    if (latitude == null) {
+      const m = blob.match(/Latitude[^0-9]*([0-9]+(?:[.,]\d+)?)°\s*([NS])/i) || blob.match(/([0-9]+(?:[.,]\d+)?)°\s*([NS])/i);
+      if (m) {
+        const val = normalizeNum(m[1]);
+        latitude = (m[2].toUpperCase() === 'S') ? (val != null ? -val : null) : val;
+      }
+    }
+    if (longitude == null) {
+      const m = blob.match(/Longitude[^0-9]*([0-9]+(?:[.,]\d+)?)°\s*([EW])/i) || blob.match(/([0-9]+(?:[.,]\d+)?)°\s*([EW])/i);
+      if (m) {
+        const val = normalizeNum(m[1]);
+        longitude = (m[2].toUpperCase() === 'W') ? (val != null ? -val : null) : val;
+      }
+    }
+  } catch { /* noop */ }
 
   // 7) Return tolerant JSON (never throw)
   return {
