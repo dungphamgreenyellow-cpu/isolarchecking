@@ -11,6 +11,9 @@ import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 import WorkerUrl from "../workers/fsXlsxWorker?worker";
 
+// Backend base URL
+const backend = import.meta.env.VITE_BACKEND_URL;
+
 // === Quick helper ===
 function inferCountryFromLocation(str = "") {
   const s = (str || "").toLowerCase();
@@ -30,7 +33,7 @@ function TestBackendButton() {
   const pingCloud = async () => {
     setLoading(true);
     try {
-  const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/`);
+  const res = await fetch(`${backend}/`);
       const text = await res.text();
       setReply("✅ " + text);
     } catch (err) {
@@ -91,7 +94,7 @@ export default function HomePage() {
     fd.append("logfile", logFile);
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, { method: "POST", body: fd });
+  const res = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
       const json = await res.json();
       if (!json.success || json.data?.note) {
         setChecking(false);
@@ -127,7 +130,7 @@ export default function HomePage() {
       if (pvsystFile) {
         const fd = new FormData();
         fd.append("file", pvsystFile);
-        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/parse-pvsyst`, {
+        const res = await fetch(`${backend}/api/parse-pvsyst`, {
           method: "POST",
           body: fd,
         });
@@ -168,7 +171,7 @@ export default function HomePage() {
       const fd = new FormData();
       fd.append("logfile", logFile);
       if (pvsystFile) fd.append("pvsyst", pvsystFile);
-      const computeRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, { method: "POST", body: fd });
+  const computeRes = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
       const computeJson = await computeRes.json();
   console.log("[DEBUG] Compute result:", computeJson);
 
@@ -185,7 +188,7 @@ export default function HomePage() {
         const capAC = n(projectData?.capacity_ac_kw ?? confirmForm?.capacityACkWac);
         const userInputCapacity = n(confirmForm?.installed);
         const capacity = (capDC && capDC > 0) ? capDC : (capAC && capAC > 0) ? capAC : (userInputCapacity || 0);
-        const rprRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/realpr`, {
+        const rprRes = await fetch(`${backend}/analysis/realpr`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ records: parsed.records, capacity })
@@ -294,7 +297,7 @@ export default function HomePage() {
                 try {
                   const fd = new FormData();
                   fd.append("logfile", logFile);
-                  const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/compute`, {
+                  const r = await fetch(`${backend}/analysis/compute`, {
                     method: "POST",
                     body: fd,
                   });

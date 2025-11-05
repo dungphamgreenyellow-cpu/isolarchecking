@@ -19,6 +19,9 @@ import {
 // RPR now computed on backend via /analysis/realpr
 import { getMonthlyGHI } from "../data/ghiBaseline";
 
+// Backend base URL
+const backend = import.meta.env.VITE_BACKEND_URL;
+
 function fmtMonthRange(start, end) {
   if (!start || !end) return "—";
   const s = new Date(start);
@@ -137,7 +140,7 @@ export default function Report() {
           irradiance: irradiance || null,
         };
 
-        const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/realpr`, {
+        const r = await fetch(`${backend}/analysis/realpr`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
