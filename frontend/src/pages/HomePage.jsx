@@ -1,13 +1,12 @@
 // === src/pages/HomePage.jsx — iSolarChecking Cloud Deploy v8.7.7 ===
 // ✅ Frontend lightweight — ALL PVSyst parsing done on backend now
-// ✅ Cloud backend via analyzeOnCloud
+// ✅ Cloud backend via direct API calls
 // ✅ Keep pastel SaaS UI & layout
 // ✅ No OCR / no pdfjs on frontend
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { uploadLog } from "../api";
-import { setSessionId } from "../sessionStore";
+// removed legacy api helpers; all calls use fetch/axios directly
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 import WorkerUrl from "../workers/fsXlsxWorker?worker";
@@ -154,7 +153,7 @@ export default function HomePage() {
     }
   };
 
-  async function handleConfirm() {
+  async function handleConfirm(confirmForm) {
     try {
       if (!logFile) throw new Error("Please upload a FusionSolar log file.");
 
@@ -176,11 +175,16 @@ export default function HomePage() {
       // RPR using FULL records with capacity if available
       let rprJson = null;
       if (parsed?.records?.length) {
-        const capacity = (
-          (projectData?.capacity && typeof projectData.capacity === 'number')
-            ? projectData.capacity
-            : (projectData?.capacity?.dc_kWp || projectData?.capacity?.ac_kW || 0)
-        );
+        // Capacity priority: DC → AC → user input (from confirm modal)
+        const n = (v) => {
+          if (v == null) return null;
+          const num = Number(String(v).replace(/[^\d.\-]/g, ""));
+          return Number.isFinite(num) ? num : null;
+        };
+        const capDC = n(projectData?.capacity_dc_kwp ?? confirmForm?.capacityDCkWp);
+        const capAC = n(projectData?.capacity_ac_kw ?? confirmForm?.capacityACkWac);
+        const userInputCapacity = n(confirmForm?.installed);
+        const capacity = (capDC && capDC > 0) ? capDC : (capAC && capAC > 0) ? capAC : (userInputCapacity || 0);
         const rprRes = await fetch(`${import.meta.env.VITE_BACKEND_URL}/analysis/realpr`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -350,8 +354,4 @@ export default function HomePage() {
   );
 }
 
-/* Auto-wired upload handler */
-async function handleUploadBackend(file) {
-  const r = await uploadLog(file);
-  if (r.ok && r.id) setSessionId(r.id);
-}
+// (removed unused legacy helper)

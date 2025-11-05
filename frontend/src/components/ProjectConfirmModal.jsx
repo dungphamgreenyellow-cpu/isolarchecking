@@ -9,6 +9,14 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
     cod: "",
     module: "",
     inverter: "",
+    // Auto-filled from PVSyst (allow override)
+    totalModules: "",
+    capacityDCkWp: "",
+    capacityACkWac: "",
+    totalInverters: "",
+    pvModuleModel: "",
+    inverterModel: "",
+    soilingPercent: "",
     tempCoeff: "0.34",
     degr: "0.5",
   });
@@ -20,8 +28,15 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
       installed: initialData?.capacity || initialData?.installed || "",
       location: initialData?.location || "",
       cod: initialData?.cod || "",
-      module: initialData?.pvModule || initialData?.module || "",
-      inverter: initialData?.inverter || "",
+      module: initialData?.pvModule || initialData?.module || initialData?.module_model || "",
+      inverter: initialData?.inverter || initialData?.inverter_model || "",
+      totalModules: initialData?.modules_total != null ? String(initialData.modules_total) : "",
+      capacityDCkWp: initialData?.capacity_dc_kwp != null ? String(initialData.capacity_dc_kwp) : "",
+      capacityACkWac: initialData?.capacity_ac_kw != null ? String(initialData.capacity_ac_kw) : "",
+      totalInverters: initialData?.inverter_count != null ? String(initialData.inverter_count) : "",
+      pvModuleModel: initialData?.module_model || "",
+      inverterModel: initialData?.inverter_model || "",
+      soilingPercent: initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : "",
       tempCoeff: "0.34",
       degr: "0.5",
     });
@@ -59,6 +74,29 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
               value={form.cod} onChange={change("cod")} />
           </label>
 
+          {/* Auto-filled from PVSyst */}
+          <label className="col-span-1 text-sm">
+            <span className="text-gray-600">Total Modules</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.totalModules} onChange={change("totalModules")} />
+          </label>
+          <label className="col-span-1 text-sm">
+            <span className="text-gray-600">Total Inverters</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.totalInverters} onChange={change("totalInverters")} />
+          </label>
+
+          <label className="col-span-1 text-sm">
+            <span className="text-gray-600">DC Capacity (kWp)</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.capacityDCkWp} onChange={change("capacityDCkWp")} />
+          </label>
+          <label className="col-span-1 text-sm">
+            <span className="text-gray-600">AC Capacity (kWac)</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.capacityACkWac} onChange={change("capacityACkWac")} />
+          </label>
+
           <label className="col-span-2 text-sm">
             <span className="text-gray-600">PV Module</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
@@ -69,6 +107,23 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
             <span className="text-gray-600">Inverter</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.inverter} onChange={change("inverter")} />
+          </label>
+
+          <label className="col-span-2 text-sm">
+            <span className="text-gray-600">PV Module Model</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.pvModuleModel} onChange={change("pvModuleModel")} />
+          </label>
+          <label className="col-span-2 text-sm">
+            <span className="text-gray-600">Inverter Model</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.inverterModel} onChange={change("inverterModel")} />
+          </label>
+
+          <label className="col-span-1 text-sm">
+            <span className="text-gray-600">Soiling (%)</span>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.soilingPercent} onChange={change("soilingPercent")} />
           </label>
 
           <label className="col-span-1 text-sm">

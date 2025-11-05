@@ -147,10 +147,10 @@ export default function Report() {
           console.error("RPR backend error:", json?.error || json);
           setRealPR("0.00");
         } else {
-          const res = json.rpr || json.details || json;
-          // res may be object with RPR field
-          setRealPR(res?.RPR ?? res ?? "0.00");
-          // daily series: if backend does not provide series, keep empty
+          const res = json.data || json.rpr || json.details || json;
+          // res should be an object with RPR field from /analysis/realpr
+          setRealPR(res?.RPR ?? "0.00");
+          // daily series not provided by backend today
           setDailyRPR(res?.series || []);
         }
       } catch (err) {
@@ -355,17 +355,4 @@ export default function Report() {
 }
 
 
-/* Auto-wired: compute via backend */
-import { useEffect, useState } from "react";
-import { computeRPR } from "../api";
-import { getSessionId } from "../sessionStore";
-function useBackendAnalysis(){
-  const [data, setData] = useState(null);
-  useEffect(()=>{ (async()=>{
-    const id = getSessionId();
-    if (!id) return;
-    const r = await computeRPR({ id });
-    if (r.ok) setData(r);
-  })(); }, []);
-  return data;
-}
+// (legacy helper removed)
