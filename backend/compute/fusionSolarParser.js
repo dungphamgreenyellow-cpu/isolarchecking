@@ -23,9 +23,36 @@ export async function streamParseAndCompute(buffer) {
       if (!rows || rows.length === 0) {
         return { success: false, note: "Empty XLSX worksheet" };
       }
-      // Prefer header at Excel row 4 (index 3) similar to FE worker; fallback to first row
-      const header = rows[3] && rows[3].some(v => v != null) ? rows[3].map(h => (typeof h === "string" ? h.trim() : h)) : rows[0].map(h => (typeof h === "string" ? h.trim() : h));
-      const startIdx = (rows[3] && rows[3].some(v => v != null)) ? 4 : 1;
+
+      // Auto-detect header row within first 6 rows by letter ratio and density
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      let headerRowIndex = range.s.r; // default to first row
+      let detectedHeaderValues = null;
+      for (let r = range.s.r; r < Math.min(range.s.r + 6, range.e.r + 1); r++) {
+        const rowValues = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = ws[XLSX.utils.encode_cell({ r, c })];
+          rowValues.push(cell ? String(cell.v).trim() : "");
+        }
+        const nonEmpty = rowValues.filter(v => v !== "").length;
+        const letterCount = rowValues.filter(v => /[A-Za-z]/.test(v)).length;
+        if ((letterCount / (nonEmpty || 1)) > 0.6 && nonEmpty >= 10) {
+          headerRowIndex = r;
+          detectedHeaderValues = rowValues;
+          break;
+        }
+      }
+
+      // If not detected by heuristic, fall back to first non-empty row in rows[]
+      if (!detectedHeaderValues) {
+        const firstNonEmpty = rows.find(r => Array.isArray(r) && r.some(v => v != null && String(v).trim() !== "")) || rows[0] || [];
+        detectedHeaderValues = firstNonEmpty.map(h => (typeof h === "string" ? h.trim() : h));
+        // best-effort mapping headerRowIndex to rows index
+        headerRowIndex = range.s.r + rows.indexOf(firstNonEmpty);
+      }
+
+      const header = detectedHeaderValues.map(h => (typeof h === "string" ? h.trim() : h));
+      const startIdx = (headerRowIndex - range.s.r + 1);
       const dataRows = rows.slice(startIdx);
 
       // Determine EAC column by instruction
@@ -38,7 +65,7 @@ export async function streamParseAndCompute(buffer) {
       ];
       const forbidden = ["Total PV yield(kWh)"];
 
-      const headers = header.map(h => (h == null ? null : String(h)));
+  const headers = header.map(h => (h == null ? null : String(h)));
       let eacCol = null;
       for (const name of exactEacNames) {
         const idx = headers.indexOf(name);

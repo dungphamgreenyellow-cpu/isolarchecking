@@ -38,7 +38,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
   if (!open) return null;
 
   const ok = logResult?.valid || logResult?.status === "parsed";
-  const canProceed = logResult?.valid; // giữ nguyên điều kiện Next theo yêu cầu chỉ sửa UI
+  const canProceed = logResult?.valid || logResult?.status === "parsed";
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
