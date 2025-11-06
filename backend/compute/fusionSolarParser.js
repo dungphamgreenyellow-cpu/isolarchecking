@@ -55,29 +55,14 @@ export async function streamParseAndCompute(buffer) {
       const startIdx = (headerRowIndex - range.s.r + 1);
       const dataRows = rows.slice(startIdx);
 
-      // Determine EAC column by instruction
-      const exactEacNames = ["Total yield(kWh)"]; // exact only
-      const aliasEacNames = [
-        "Feed-in energy(kWh)",
-        "Annual energy(kWh)",
-        "Accumulated amount of absorbed electricity(kWh)",
-        "Total Yield (kWh)",
-      ];
-      const forbidden = ["Total PV yield(kWh)"];
-
-  const headers = header.map(h => (h == null ? null : String(h)));
-      let eacCol = null;
-      for (const name of exactEacNames) {
-        const idx = headers.indexOf(name);
-        if (idx !== -1) { eacCol = name; break; }
+      // Determine EAC column: ONLY accept exact "Total yield(kWh)"
+      const headers = header.map(h => (h == null ? null : String(h)));
+      const totalYieldColIndex = headers.findIndex(
+        (h) => typeof h === "string" && h.trim().toLowerCase() === "total yield(kwh)"
+      );
+      if (totalYieldColIndex === -1) {
+        throw new Error("Không tìm thấy cột Total yield(kWh)");
       }
-      if (!eacCol) {
-        for (const name of aliasEacNames) {
-          const idx = headers.indexOf(name);
-          if (idx !== -1) { eacCol = name; break; }
-        }
-      }
-      if (forbidden.includes(eacCol)) eacCol = null;
 
       const tKeys = ["Start Time", "StartTime", "Time", "Timestamp"];
       const invKeys = ["ManageObject", "Device name", "Inverter", "Inverter Name"];
@@ -113,14 +98,14 @@ export async function streamParseAndCompute(buffer) {
         // pick columns
         const rawT = tKeys.map(k => obj[k]).find(v => v != null && v !== "");
         const rawInv = invKeys.map(k => obj[k]).find(v => v != null && v !== "");
-        const rawEac = eacCol ? obj[eacCol] : null;
+        const rawEac = r[totalYieldColIndex];
         if (!rawT || !rawInv || rawEac == null) continue;
 
         const day = toYMD(rawT);
         if (!day) continue;
         let inv = String(rawInv).split("/")[0].trim().replace(/\s+/g, "");
         inv = inv.startsWith("INV-") ? inv : `INV-${inv}`;
-        const val = Number(String(rawEac).replace(/[, ]/g, ""));
+  const val = Number(String(rawEac).replace(/[, ]/g, ""));
         if (!Number.isFinite(val)) continue;
 
         const key = inv + "|" + day;
