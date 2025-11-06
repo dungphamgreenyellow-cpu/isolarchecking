@@ -124,10 +124,17 @@ export async function streamParseAndCompute(buffer) {
       }
       for (const d in daily) dailyProductionTotal += daily[d];
 
+      // Determine overall first/last day from aggregated daily keys
+      const dayKeys = Object.keys(daily).sort();
+      const firstDay = dayKeys.length ? dayKeys[0] : null;
+      const lastDay = dayKeys.length ? dayKeys[dayKeys.length - 1] : null;
+
       return {
         success: true,
         dailyProduction: daily,
         dailyProductionTotal,
+        firstDay,
+        lastDay,
         parsedRecordsCount,
         allHeaders: headers,
       };
