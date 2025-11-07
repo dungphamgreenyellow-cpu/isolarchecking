@@ -5,11 +5,14 @@
 // ✅ Đồng bộ logic với parser v9.9-LTS
 
 import React, { useEffect, useState } from "react";
-import { checkFusionSolarPeriod } from "../utils/fusionSolarParser";
+
+// Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
+// (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
 
 export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onNext }) {
   const [checking, setChecking] = useState(false);
-  const [logResult, setLogResult] = useState(null);
+  const [logResult, setLogResult] = useState(null); // raw parse payload (data.data)
+  const [logStatus, setLogStatus] = useState({ ok: false, msg: "" }); // simplified status object
   const [pvsystResult, setPvsystResult] = useState(null);
 
   useEffect(() => {
@@ -18,9 +21,34 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       setChecking(true);
       let logRes = null, pvRes = null;
       try {
-        if (logFile) logRes = await checkFusionSolarPeriod(logFile);
-      } catch {
-        logRes = { valid: false, message: "Error reading log file" };
+        if (logFile) {
+          const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
+          const formData = new FormData();
+          formData.append("logfile", logFile);
+          const res = await fetch(`${backendURL}/analysis/compute`, {
+            method: "POST",
+            body: formData,
+          });
+          let data = null;
+          try {
+            data = await res.json();
+          } catch (jsonErr) {
+            console.error("[FileCheckModal] JSON parse error", jsonErr);
+            setLogStatus({ ok: false, msg: "Invalid JSON response" });
+          }
+          if (data?.success) {
+            // success: backend returns { success: true, data: {...}, parse_ms }
+            setLogStatus({ ok: true, msg: "FusionSolar log parsed successfully" });
+            logRes = { ...data.data, success: true, parse_ms: data.parse_ms };
+          } else {
+            setLogStatus({ ok: false, msg: data?.message || "Error reading log file" });
+            logRes = { success: false, message: data?.message || "Error reading log file" };
+          }
+        }
+      } catch (err) {
+        console.error("[FileCheckModal] Upload error:", err);
+        setLogStatus({ ok: false, msg: "Server not reachable" });
+        logRes = { success: false, message: "Server not reachable" };
       }
 
       if (pvsystFile) {
@@ -37,8 +65,9 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
 
   if (!open) return null;
 
-  const ok = logResult?.valid || logResult?.status === "parsed";
-  const canProceed = logResult?.valid || logResult?.status === "parsed";
+  // New canProceed logic based on logStatus.ok
+  const ok = logStatus.ok;
+  const canProceed = logStatus.ok;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -71,11 +100,9 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
             <p className="text-xs text-gray-500 mt-1">
               {checking
                 ? "Parsing log..."
-                : logResult?.status === "parsed"
-                ? "Parsed"
-                : logResult?.startDate && logResult?.endDate
-                ? `OK — ${logResult.days} days (${logResult.startDate} → ${logResult.endDate})`
-                : logResult?.message || "Waiting..."}
+                : ok
+                ? "Log parsed successfully"
+                : logStatus.msg || "Waiting..."}
             </p>
           </div>
 
@@ -117,9 +144,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
             Cancel
           </button>
           <button
-            onClick={() =>
-              onNext({ ...logResult, pvsystOK: !!pvsystResult?.valid })
-            }
+            onClick={() => onNext({ ...logResult, pvsystOK: !!pvsystResult?.valid })}
             disabled={!canProceed || checking}
             className={`px-5 py-2 rounded-lg font-medium text-white shadow-md transition-all ${
               canProceed && !checking
