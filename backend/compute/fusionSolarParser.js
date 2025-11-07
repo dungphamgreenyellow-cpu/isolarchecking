@@ -21,45 +21,50 @@ export async function streamParseAndCompute(buffer) {
       const wb = XLSX.read(buffer, { type: "buffer" });
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      if (!rows || rows.length === 0) {
-        return { success: false, note: "Empty XLSX worksheet" };
-      }
+      // === [v9.9-Flex++ Optimized Header Detection] ===
+      const HEADER_KEYWORDS = [
+        { key: "manageobject", weight: 1 },
+        { key: "start time", weight: 1 },
+        { key: "active power", weight: 1 },
+        { key: "total yield", weight: 1 },
+      ];
 
-      // Auto-detect header row within first 6 rows by letter ratio and density
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      let headerRowIndex = range.s.r; // default to first row
-      let detectedHeaderValues = null;
-      for (let r = range.s.r; r < Math.min(range.s.r + 6, range.e.r + 1); r++) {
-        const rowValues = [];
-        for (let c = range.s.c; c <= range.e.c; c++) {
-          const cell = ws[XLSX.utils.encode_cell({ r, c })];
-          rowValues.push(cell ? String(cell.v).trim() : "");
-        }
-        const nonEmpty = rowValues.filter(v => v !== "").length;
-        const letterCount = rowValues.filter(v => /[A-Za-z]/.test(v)).length;
-        if ((letterCount / (nonEmpty || 1)) > 0.6 && nonEmpty >= 10) {
-          headerRowIndex = r;
-          detectedHeaderValues = rowValues;
+      let headerRowIndex = -1;
+      let headerScore = 0;
+      for (let i = 0; i < 10; i++) {
+        const row = XLSX.utils.sheet_to_json(ws, { header: 1, range: i, raw: false })[0];
+        if (!row) continue;
+        const lower = row.map((c) => (c || "").toString().toLowerCase());
+        let score = 0;
+        HEADER_KEYWORDS.forEach((k) => {
+          if (lower.some((cell) => cell.includes(k.key))) score += k.weight;
+        });
+        if (score >= 3) {
+          headerRowIndex = i;
+          headerScore = score;
+          console.log(`[FusionSolarParser] Header xác định tại dòng ${i} (điểm ${score})`);
           break;
         }
       }
 
-      // If not detected by heuristic, fall back to first non-empty row in rows[]
-      if (!detectedHeaderValues) {
-        const firstNonEmpty = rows.find(r => Array.isArray(r) && r.some(v => v != null && String(v).trim() !== "")) || rows[0] || [];
-        detectedHeaderValues = firstNonEmpty.map(h => (typeof h === "string" ? h.trim() : h));
-        // best-effort mapping headerRowIndex to rows index
-        headerRowIndex = range.s.r + rows.indexOf(firstNonEmpty);
+      if (headerRowIndex === -1) {
+        console.warn("[FusionSolarParser] Không tìm thấy header FusionSolar hợp lệ trong 10 dòng đầu.");
+        return { success: false, message: "Không tìm thấy header FusionSolar hợp lệ (cần ManageObject, Start Time, Active power, Total yield)" };
       }
 
-      const header = detectedHeaderValues.map(h => (typeof h === "string" ? h.trim() : h));
-      const startIdx = (headerRowIndex - range.s.r + 1);
+      console.log(`[FusionSolarParser] Sử dụng header dòng ${headerRowIndex}`);
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+      if (!rows || rows.length === 0) {
+        return { success: false, note: "Empty XLSX worksheet" };
+      }
+      const header = (rows[headerRowIndex] || []).map((h) => (typeof h === "string" ? h.trim() : h));
+      const startIdx = headerRowIndex + 1;
       const dataRows = rows.slice(startIdx);
 
   // Flexible header detection: detect Start Time, Total yield(kWh), and Inverter/ManageObject columns
   // TODO: consider broader localization variants of FusionSolar headers (e.g., non-English)
-      const headers = header.map(h => (h == null ? null : String(h)));
+  const headers = header.map(h => (h == null ? null : String(h)));
+  console.log("[FusionSolarParser] Headers đọc được:", headers);
       let startTimeCol = -1, totalYieldColIndex = -1, inverterColIndex = -1;
       headers.forEach((cell, i) => {
         const txt = (cell || "").toString().trim().toLowerCase();
