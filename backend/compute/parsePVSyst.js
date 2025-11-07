@@ -31,7 +31,11 @@ export async function parsePVSystPDF(filePath) {
   // === Fallback to pdfjs-dist if no/short text ===
   if (!pdfText || pdfText.length < 100) {
     used = "pdfjs-dist";
-    const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const _getDocument = pdfjsLib.getDocument || pdfjsLib.default?.getDocument;
+    if (typeof _getDocument !== "function") {
+      throw new Error("pdfjsLib.getDocument not available");
+    }
+  const doc = await _getDocument({ data: new Uint8Array(buffer) }).promise;
     const pages = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
@@ -87,14 +91,46 @@ export async function parsePVSystPDF(filePath) {
     if (!t) return { lat: null, lon: null };
     const text = String(t);
 
+    // Prefer explicit Latitude/Longitude tokens when present
+    if (/(Lat|Latitude)/i.test(text) && /(Lon|Longitude)/i.test(text)) {
+      // Prefer decimal numbers and plausible ranges
+      const rawTokens = text.match(/[+\-]?\d{1,3}(?:[.,]\d+)?/g) || [];
+      const tokens = rawTokens
+        .map((s) => ({ raw: s, val: parseNumberFlexible(s), hasDec: /[.,]/.test(s) }))
+        .filter((t) => Number.isFinite(t.val));
+      // Pick first lat (<=90) then next lon (<=180), prefer decimals
+      let latIdx = tokens.findIndex((t) => t.hasDec && Math.abs(t.val) <= 90);
+      if (latIdx === -1) latIdx = tokens.findIndex((t) => Math.abs(t.val) <= 90);
+      if (latIdx !== -1) {
+        const lonIdx = tokens.findIndex((t, i) => i > latIdx && Math.abs(t.val) <= 180);
+        if (lonIdx !== -1) {
+          let lat = tokens[latIdx].val;
+          let lon = tokens[lonIdx].val;
+          const hemiLat = (text.match(/\b([NS])\b/) || [])[1]?.toUpperCase();
+          const hemiLon = (text.match(/\b([EW])\b/) || [])[1]?.toUpperCase();
+          if (hemiLat === "S" && lat != null) lat = -Math.abs(lat);
+          if (hemiLat === "N" && lat != null) lat = Math.abs(lat);
+          if (hemiLon === "W" && lon != null) lon = -Math.abs(lon);
+          if (hemiLon === "E" && lon != null) lon = Math.abs(lon);
+          return { lat, lon };
+        }
+      }
+    }
+
     // 1) Try decimal with optional hemisphere near values
-    // e.g., 10.123 N , 106.456 E  OR  -10.123, 106.456
+    // e.g., 10.123 N , 106.456 E  OR  Lat 10.123 , Lon 106.456
+  const hasKeywords = /(Lat|Latitude).*(Lon|Longitude)/i.test(text);
     const decPair = text.match(/([+\-]?\d{1,2}(?:[.,]\d+)?)\s*([NS])?[^\dA-Za-z+\-.]+([+\-]?\d{2,3}(?:[.,]\d+)?)\s*([EW])?/i);
     if (decPair) {
       let lat = parseNumberFlexible(decPair[1]);
       let lon = parseNumberFlexible(decPair[3]);
       const hemiLat = decPair[2]?.toUpperCase();
       const hemiLon = decPair[4]?.toUpperCase();
+      const hasHemi = !!(hemiLat || hemiLon);
+      if (!hasHemi && !hasKeywords) {
+        // Avoid false positive from dates like 21/12/22
+        return { lat: null, lon: null };
+      }
       if (hemiLat === "S" && lat != null) lat = -Math.abs(lat);
       if (hemiLat === "N" && lat != null) lat = Math.abs(lat);
       if (hemiLon === "W" && lon != null) lon = -Math.abs(lon);
@@ -128,7 +164,9 @@ export async function parsePVSystPDF(filePath) {
   // === Extraction (regex) ===
   const find = (r) => (pdfText.match(r) || [])[2]?.trim() || null;
 
+  // Site name: prefer "Project: <name>" (stop before Variant:)
   const siteName =
+    (pdfText.match(/Project:\s*([^\n]+?)(?:\s+Variant:|$)/i) || [])[1]?.trim() ||
     find(/((?:Project|Site)\s*name)[:\-\s]*([^\n]+)/i);
 
   // Capacities with units
@@ -138,20 +176,31 @@ export async function parsePVSystPDF(filePath) {
   let acRaw =
     find(/((?:AC|Inverter)\s*(?:power|capacity))[:\-\s]*([\d.,\s]+\s*(?:kWac|kW|MWac|kVA|MVA))/i);
 
-  // Models
-  const moduleModel =
+  // Models (prefer 'Manufacturer Model <name> (' patterns)
+  let moduleModel =
+    (pdfText.match(/PV\s+module\s+Manufacturer\s+Model\s+([^()\n]+?)\s*\(/i) || [])[1]?.trim() ||
     find(/((?:Module|PV module|Module type))[:\-\s]*([^\n]+)/i);
-  const inverterModel =
+  let inverterModel =
+    (pdfText.match(/Inverter\s+Manufacturer\s+Model\s+([^()\n]+?)\s*\(/i) || [])[1]?.trim() ||
     find(/((?:Inverter|Inverter type))[:\-\s]*([^\n]+)/i);
 
   // Tilt/Azimuth/Soiling
-  const tiltRaw = find(/(Tilt)[:\-\s]*([\d.,]+)/i);
-  const azimuthRaw = find(/(Azimuth)[:\-\s]*([\d.,\-]+)/i);
+  let tiltRaw = find(/(Tilt)[:\-\s]*([\d.,]+)/i);
+  let azimuthRaw = find(/(Azimuth)[:\-\s]*([\d.,\-]+)/i);
+  // Prefer explicit pair "Tilt/Azimuth 8/0 °" or "Tilts/azimuths ... 8 / 0 °"
+  const tiltAz1 = pdfText.match(/Tilt\s*\/\s*Azimuth\s*([\-\d.,]+)\s*\/\s*([\-\d.,]+)\s*°/i);
+  const tiltAz2 = pdfText.match(/Tilts?\s*\/\s*azimuths?[^\n]*?([\-\d.,]+)\s*\/\s*([\-\d.,]+)\s*°/i);
+  const taz = tiltAz1 || tiltAz2;
+  if (taz) {
+    tiltRaw = taz[1];
+    azimuthRaw = taz[2];
+  }
   const soilingRaw = find(/(Soiling\s*loss)[:\-\s]*([\d.,]+)/i);
 
-  // GPS: try to locate a "Lat" line first; otherwise scan whole text
-  const gpsLine = (pdfText.match(/Lat[^\n]*/i) || [])[0] || "";
-  const gps = gpsLine ? parseLatLon(gpsLine) : parseLatLon(pdfText);
+  // GPS: prefer a short window around the first Latitude occurrence (since pdfText may be single-line)
+  const latIdx = pdfText.search(/Lat(?:itude)?\s+Longitude/i);
+  const gpsLine = latIdx >= 0 ? pdfText.slice(latIdx, latIdx + 120) : "";
+  const gps = gpsLine ? parseLatLon(gpsLine) : { lat: null, lon: null };
 
   // Normalize units: MWp -> kWp, MWac -> kW
   const toKWp = (s) => {
@@ -168,6 +217,34 @@ export async function parsePVSystPDF(filePath) {
     if (/MWac|MVA/i.test(s)) return val * 1000; // best-effort when only MVA present
     return val; // kW or kWac
   };
+
+  // Additional targeted capacity extraction
+  if (!dcRaw) {
+    let m = pdfText.match(/System\s+power[:\-\s]*([\d.,]+)\s*(kWp|MWp)/i)
+      || pdfText.match(/Total\s+PV\s+power[^\n]*?([\d.,]+)\s*(kWp|MWp)/i);
+    if (m) dcRaw = `${m[1]} ${m[2] || "kWp"}`;
+  }
+  if (!acRaw) {
+    // Target 'Total inverter power' first
+    let m = pdfText.match(/Total\s+inverter\s+power\s*[:\-]?\s*([\d.,]+)\s*(kWac|kW|MWac)/i);
+    // Pattern like: "... 800 1.226 units kWac" → take the first number before 'units kWac'
+    if (!m) {
+      const twoNum = pdfText.match(/\b([\d.,]+)\s+([\d.,]+)\s+units\s+kWac\b/i);
+      if (twoNum) m = [null, twoNum[1], 'kWac'];
+    }
+    // Fallback: line with Inverters .. Pnom total capturing the larger total (second number in the block)
+    if (!m) {
+      const invLine = pdfText.match(/Inverters\s+Nb\.\s+of\s+units\s+Pnom\s+total\s+Pnom\s+ratio[^\n]+/i);
+      if (invLine) {
+        const nums = (invLine[0].match(/\b[\d.,]+\b/g) || []).map(parseNumberFlexible);
+        // Heuristic: largest number in this block (likely total inverter power)
+        const candidate = nums.filter((v) => Number.isFinite(v)).sort((a,b)=>b-a)[0];
+        if (candidate) m = [null, String(candidate), (invLine[0].match(/kWac|kW|MWac/i)||['kW'])[0]];
+      }
+    }
+    if (!m) m = pdfText.match(/Total\s+power\s*[:\-]?[^\n]*?\b([\d.,]+)\s*(kWac|kW|MWac)\b/i);
+    if (m) acRaw = `${m[1]} ${m[2] || "kW"}`;
+  }
 
   const dc_kWp = toKWp(dcRaw);
   const ac_kW = toKWac(acRaw);
