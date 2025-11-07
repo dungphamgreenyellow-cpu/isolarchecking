@@ -4,13 +4,14 @@ import cors from "cors";
 import fileUpload from "express-fileupload";
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
 
 import uploadRoutes from "./routes/upload.js";
 import analysisRoutes from "./routes/analysis.js";
 
 import { streamParseAndCompute } from "./compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "./compute/realPRCalculator.js";
-import { parsePVSyst } from "./compute/parsePVSyst.js";
+import { parsePVSystPDF } from "./compute/parsePVSyst.js";
 
 const app = express();
 // ✅ Khuyến nghị: auto PORT từ Render/host, có fallback để chạy local
@@ -34,12 +35,12 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "https://isolarchecking.onrender.com",
-  "https://isolarchecking-frontend.onrender.com",
+  "https://isolarchecking-backend.onrender.com",
 ];
 
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: function (origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -47,12 +48,14 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    methods: ["GET", "POST", "OPTIONS"],
   })
 );
 
-console.log("[CORS] Allowed origins:", allowedOrigins);
+// ✅ Rất quan trọng — cho phép preflight OPTIONS
+app.options("*", cors());
+console.log("[CORS] Active origins:", allowedOrigins);
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -68,9 +71,15 @@ app.post("/api/parse-pvsyst", async (req, res) => {
     if (!req.files || !req.files.file) {
       return res.status(400).json({ error: "No PDF uploaded" });
     }
-    const buffer = req.files.file.data; // <-- quan trọng: buffer từ express-fileupload
-    const info = await parsePVSyst(buffer);
-    return res.json({ success: true, data: info });
+    const f = req.files.file;
+    const tmpPath = `/tmp/pvsyst_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`;
+    await f.mv(tmpPath);
+    const t0 = performance.now();
+    const info = await parsePVSystPDF(tmpPath);
+    const dt = performance.now() - t0;
+    try { await fs.promises.unlink(tmpPath); } catch {}
+    console.log("[/api/parse-pvsyst] file=", f.name, "ms=", dt.toFixed(1));
+    return res.json({ success: true, ms: dt, data: info });
   } catch (err) {
     console.error("❌ parse-pvsyst error:", err);
     return res.status(500).json({ success: false, error: err.message });
