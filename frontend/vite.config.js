@@ -3,7 +3,5 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  define: {
-    'process.env': process.env,
-  }
+  // Avoid exposing entire process.env to client; use import.meta.env.VITE_*
 });
