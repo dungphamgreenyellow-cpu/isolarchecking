@@ -1,9 +1,10 @@
 // backend/routes/analysis.js
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
-import { parsePVSyst } from "../compute/parsePVSyst.js";
+import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 
 const router = express.Router();
 
@@ -82,8 +83,14 @@ router.post("/parse-pvsyst", async (req, res) => {
   try {
     const file = req.files?.pvsyst || req.files?.file;
     if (!file?.data) return res.status(400).json({ success: false, error: "No PDF uploaded" });
-    const info = await parsePVSyst(file.data);
-    return res.json({ success: true, data: info });
+    const tmpPath = `/tmp/pvsyst_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`;
+    await file.mv(tmpPath);
+    const t0 = performance.now();
+    const info = await parsePVSystPDF(tmpPath);
+    const dt = performance.now() - t0;
+    console.log("[/analysis/parse-pvsyst] file=", file.name, "ms=", dt.toFixed(1));
+    try { await fs.promises.unlink(tmpPath); } catch {}
+    return res.json({ success: true, ms: dt, data: info });
   } catch (err) {
     console.error("parse-pvsyst error:", err);
     return res.status(500).json({ success: false, error: err.message });
