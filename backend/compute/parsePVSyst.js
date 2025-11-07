@@ -1,105 +1,199 @@
 import fs from "fs";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
-let pdf;
-try {
-  const mod = await import("pdf-parse");  // ✅ Dynamic import hỗ trợ CJS
-  pdf = mod.default || mod;
-} catch (err) {
-  console.error("[parsePVSyst] Failed to load pdf-parse:", err);
-}
+// PVSyst PDF Parser v5.3.4 — Render-safe, Node20 ESM compatible
+// Primary text extraction: pdf-parse (dynamic import inside function)
+// Fallback extraction: pdfjs-dist with simple token join
 
-// v5.3.2 with pdfjs-dist fallback (FujiSeal confirmed)
 export async function parsePVSystPDF(filePath) {
+  const buffer = await fs.promises.readFile(filePath);
+
+  // === Try pdf-parse first (dynamic import, guarded) ===
+  let used = "pdf-parse";
+  let pdfText = "";
   try {
-    const buffer = fs.readFileSync(filePath);
+    let pdfModule = null;
+    try {
+      const mod = await import("pdf-parse").catch(() => null);
+      pdfModule = mod?.default || mod;
+    } catch {
+      pdfModule = null;
+    }
+    if (typeof pdfModule === "function") {
+      const data = await pdfModule(buffer);
+      pdfText = (data?.text || "").replace(/\s+/g, " ").trim();
+    }
+  } catch (e) {
+    // swallow, will fallback
+    pdfText = "";
+  }
 
-    // --- Step 1: Try standard pdf-parse ---
-    let data = await pdf(buffer);
-    let text = (data?.text || "").replace(/\s+/g, " ").trim();
+  // === Fallback to pdfjs-dist if no/short text ===
+  if (!pdfText || pdfText.length < 100) {
+    used = "pdfjs-dist";
+    const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      const text = content.items.map((it) => it.str).join(" ");
+      pages.push(text);
+    }
+    pdfText = pages.join(" ").replace(/\s+/g, " ").trim();
+  }
 
-    // --- Step 2: pdfjs-dist fallback if too short ---
-    if (!text || text.length < 100) {
-      console.log("[parsePVSyst] pdf-parse text too short -> using pdfjs-dist fallback");
-      const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
-      const pages = [];
-      for (let p = 1; p <= doc.numPages; p++) {
-        const page = await doc.getPage(p);
-        const content = await page.getTextContent();
-        const s = content.items.map(i => i.str).join(" ");
-        pages.push(s);
+  // Logging for diagnostics
+  console.log(`[parsePVSyst] Used: ${used} | length=${pdfText.length}`);
+  console.log("[parsePVSyst] First 500 chars:", pdfText.slice(0, 500));
+
+  // === Helpers ===
+  const parseNumberFlexible = (raw) => {
+    if (raw == null) return null;
+    let s = String(raw).trim();
+    if (!s) return null;
+    // keep digits, separators, sign
+    s = s.replace(/[^0-9,\.\-]/g, "");
+    if (!s) return null;
+    const hasComma = s.includes(",");
+    const hasDot = s.includes(".");
+    if (hasComma && hasDot) {
+      // Determine decimal separator as the rightmost of comma/dot
+      const lastComma = s.lastIndexOf(",");
+      const lastDot = s.lastIndexOf(".");
+      if (lastComma > lastDot) {
+        // comma as decimal, remove dots
+        s = s.replace(/\./g, "");
+        s = s.replace(",", ".");
+      } else {
+        // dot as decimal, remove commas
+        s = s.replace(/,/g, "");
       }
-      text = pages.join(" ").replace(/\s+/g, " ").trim();
+    } else if (hasComma && !hasDot) {
+      // only comma → treat as decimal
+      s = s.replace(",", ".");
+    } // only dot or neither → leave as is
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const toDecimal = (deg, min, sec) => {
+    const d = parseFloat(deg) || 0;
+    const m = parseFloat(min) || 0;
+    const s = parseFloat(sec) || 0;
+    return d + m / 60 + s / 3600;
+  };
+
+  const parseLatLon = (t) => {
+    if (!t) return { lat: null, lon: null };
+    const text = String(t);
+
+    // 1) Try decimal with optional hemisphere near values
+    // e.g., 10.123 N , 106.456 E  OR  -10.123, 106.456
+    const decPair = text.match(/([+\-]?\d{1,2}(?:[.,]\d+)?)\s*([NS])?[^\dA-Za-z+\-.]+([+\-]?\d{2,3}(?:[.,]\d+)?)\s*([EW])?/i);
+    if (decPair) {
+      let lat = parseNumberFlexible(decPair[1]);
+      let lon = parseNumberFlexible(decPair[3]);
+      const hemiLat = decPair[2]?.toUpperCase();
+      const hemiLon = decPair[4]?.toUpperCase();
+      if (hemiLat === "S" && lat != null) lat = -Math.abs(lat);
+      if (hemiLat === "N" && lat != null) lat = Math.abs(lat);
+      if (hemiLon === "W" && lon != null) lon = -Math.abs(lon);
+      if (hemiLon === "E" && lon != null) lon = Math.abs(lon);
+      return { lat, lon };
     }
 
-    console.log("[parsePVSyst] First 500 chars:", text.slice(0, 500));
+    // 2) Try DMS tokens with hemisphere letters, take first two occurrences
+    const dmsRe = /(\d{1,3})\s*[°\s]\s*(\d{1,2})?['’′]?\s*(\d{1,2})?["”″]?\s*([NSEW])/gi;
+    const tokens = [];
+    let m;
+    while ((m = dmsRe.exec(text)) && tokens.length < 2) {
+      tokens.push(m);
+    }
+    if (tokens.length >= 2) {
+      const a = tokens[0];
+      const b = tokens[1];
+      let lat = toDecimal(a[1], a[2], a[3]);
+      let lon = toDecimal(b[1], b[2], b[3]);
+      const hemiA = a[4].toUpperCase();
+      const hemiB = b[4].toUpperCase();
+      if (hemiA === "S") lat = -Math.abs(lat);
+      if (hemiB === "W") lon = -Math.abs(lon);
+      // If order detected as lon-lat, try swap (rare). Keep simple: assume first is lat.
+      return { lat, lon };
+    }
 
-    // --- Step 3: Keyword-based extraction ---
-    const find = (regex) => (text.match(regex) || [])[1]?.trim() || null;
+    return { lat: null, lon: null };
+  };
 
-    const siteName =
-      find(/Site Name[:\s]*([A-Za-z0-9\s\-_]+)/i) ||
-      find(/Project[:\s]*([A-Za-z0-9\s\-_]+)/i);
+  // === Extraction (regex) ===
+  const find = (r) => (pdfText.match(r) || [])[2]?.trim() || null;
 
-    const gpsMatch =
-      text.match(/Lat[:\s]*([0-9]{1,2}\.[0-9]+)/i) ||
-      text.match(/([0-9]{1,2}\.[0-9]{2,})\s*[°]?[,\s;]\s*(1[0-1][0-9]\.[0-9]{2,})/i) ||
-      text.match(/([0-9]{1,2}\.[0-9]+)[\s,]+(10[0-9]\.[0-9]+)/i);
+  const siteName =
+    find(/((?:Project|Site)\s*name)[:\-\s]*([^\n]+)/i);
 
-    const gps = gpsMatch ? { latitude: gpsMatch[1], longitude: gpsMatch[2] } : null;
+  // Capacities with units
+  // DC (kWp/MWp)
+  let dcRaw =
+    find(/((?:Array|Installed|PV)\s*(?:power|capacity))[:\-\s]*([\d.,\s]+\s*(?:kWp|MWp))/i);
+  let acRaw =
+    find(/((?:AC|Inverter)\s*(?:power|capacity))[:\-\s]*([\d.,\s]+\s*(?:kWac|kW|MWac|kVA|MVA))/i);
 
-    const cod =
-      find(/Report Date[:\s]*([0-9]{2}[-/][0-9]{2}[-/][0-9]{4})/i) ||
-      find(/Generated on[:\s]*([0-9]{2}[-/][0-9]{2}[-/][0-9]{4})/i) ||
-      find(/Commissioning[:\s]*([0-9]{2}[-/][0-9]{2}[-/][0-9]{4})/i);
+  // Models
+  const moduleModel =
+    find(/((?:Module|PV module|Module type))[:\-\s]*([^\n]+)/i);
+  const inverterModel =
+    find(/((?:Inverter|Inverter type))[:\-\s]*([^\n]+)/i);
 
-    const pvModule =
-      find(/PV module[:\s]*([A-Za-z0-9\-\/]+)/i) ||
-      find(/Module type[:\s]*([A-Za-z0-9\-\/]+)/i) ||
-      find(/Module name[:\s]*([A-Za-z0-9\-\/]+)/i);
+  // Tilt/Azimuth/Soiling
+  const tiltRaw = find(/(Tilt)[:\-\s]*([\d.,]+)/i);
+  const azimuthRaw = find(/(Azimuth)[:\-\s]*([\d.,\-]+)/i);
+  const soilingRaw = find(/(Soiling\s*loss)[:\-\s]*([\d.,]+)/i);
 
-    const inverter =
-      find(/Inverter[:\s]*([A-Za-z0-9\-\/]+)/i) ||
-      find(/Inverter type[:\s]*([A-Za-z0-9\-\/]+)/i) ||
-      find(/Inverter model[:\s]*([A-Za-z0-9\-\/]+)/i);
+  // GPS: try to locate a "Lat" line first; otherwise scan whole text
+  const gpsLine = (pdfText.match(/Lat[^\n]*/i) || [])[0] || "";
+  const gps = gpsLine ? parseLatLon(gpsLine) : parseLatLon(pdfText);
 
-    const dcCapacity =
-      find(/Installed DC power[:\s]*([\d,\.]+)/i) ||
-      find(/Array power[:\s]*([\d,\.]+)/i) ||
-      find(/PV power[:\s]*([\d,\.]+)/i);
+  // Normalize units: MWp -> kWp, MWac -> kW
+  const toKWp = (s) => {
+    if (!s) return null;
+    const val = parseNumberFlexible(s);
+    if (val == null) return null;
+    if (/MWp/i.test(s)) return val * 1000;
+    return val; // already kWp
+  };
+  const toKWac = (s) => {
+    if (!s) return null;
+    const val = parseNumberFlexible(s);
+    if (val == null) return null;
+    if (/MWac|MVA/i.test(s)) return val * 1000; // best-effort when only MVA present
+    return val; // kW or kWac
+  };
 
-    const acCapacity =
-      find(/AC Power[:\s]*([\d,\.]+)/i) ||
-      find(/Nominal AC power[:\s]*([\d,\.]+)/i);
+  const dc_kWp = toKWp(dcRaw);
+  const ac_kW = toKWac(acRaw);
+  const tilt_deg = parseNumberFlexible(tiltRaw);
+  const azimuth_deg = parseNumberFlexible(azimuthRaw);
+  const soiling_loss_percent = parseNumberFlexible(soilingRaw);
+  const dc_ac_ratio = dc_kWp && ac_kW ? Number((dc_kWp / ac_kW).toFixed(3)) : null;
 
-    const totalModules =
-      find(/Nb of modules[:\s]*([\d,]+)/i) ||
-      find(/Total modules[:\s]*([\d,]+)/i);
+  // Field logs for quick validation
+  console.log("[parsePVSyst] siteName:", siteName);
+  console.log("[parsePVSyst] GPS:", gps);
+  console.log("[parsePVSyst] PV Module:", moduleModel);
+  console.log("[parsePVSyst] Inverter:", inverterModel);
+  console.log("[parsePVSyst] DC kWp:", dc_kWp, "| AC kW:", ac_kW, "| ratio:", dc_ac_ratio);
 
-    const totalInverters =
-      find(/Nb of inverters[:\s]*([\d,]+)/i) ||
-      find(/Total inverters[:\s]*([\d,]+)/i);
-
-    console.log("[parsePVSyst] siteName:", siteName);
-    console.log("[parsePVSyst] GPS:", gps);
-    console.log("[parsePVSyst] COD:", cod);
-    console.log("[parsePVSyst] PV Module:", pvModule);
-    console.log("[parsePVSyst] Inverter:", inverter);
-    console.log("[parsePVSyst] DC:", dcCapacity, "| AC:", acCapacity);
-
-    return {
-      siteName,
-      gps,
-      cod,
-      pvModule,
-      inverter,
-      dcCapacity,
-      acCapacity,
-      totalModules,
-      totalInverters,
-    };
-  } catch (err) {
-    console.error("[parsePVSyst] Error:", err);
-    return { error: err.message };
-  }
+  return {
+    success: true,
+    siteName,
+    gps,
+    capacities: { dc_kWp, ac_kW },
+    moduleModel,
+    inverterModel,
+    tilt_deg,
+    azimuth_deg,
+    soiling_loss_percent,
+    dc_ac_ratio,
+    rawText: pdfText.slice(0, 1000),
+  };
 }
