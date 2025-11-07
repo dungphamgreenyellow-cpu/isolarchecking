@@ -21,37 +21,51 @@ export async function streamParseAndCompute(buffer) {
       const wb = XLSX.read(buffer, { type: "buffer" });
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];
-      // === [v9.9-Flex++ Optimized Header Detection] ===
-      const HEADER_KEYWORDS = [
-        { key: "manageobject", weight: 1 },
-        { key: "start time", weight: 1 },
-        { key: "active power", weight: 1 },
-        { key: "total yield", weight: 1 },
-      ];
+      // === [v9.9-Flex++ Optimized Header Detection] with tie-break preference for 'Site Name' and rich text rows ===
+      const HEADER_PRIMARY = ["manageobject", "start time", "active power", "total yield"];
+      const HEADER_SECONDARY = ["device", "inverter", "energy", "power", "voltage", "current", "site name"]; // helpers
 
-      let headerRowIndex = -1;
-      let headerScore = 0;
+      let best = { index: -1, primary: -1, secondary: -1, textCount: -1, hasSite: false, matched: [] };
       for (let i = 0; i < 10; i++) {
         const row = XLSX.utils.sheet_to_json(ws, { header: 1, range: i, raw: false })[0];
         if (!row) continue;
-        const lower = row.map((c) => (c || "").toString().toLowerCase());
-        let score = 0;
-        HEADER_KEYWORDS.forEach((k) => {
-          if (lower.some((cell) => cell.includes(k.key))) score += k.weight;
-        });
-        if (score >= 3) {
-          headerRowIndex = i;
-          headerScore = score;
-          console.log(`[FusionSolarParser] Header xác định tại dòng ${i} (điểm ${score})`);
-          break;
+        const cells = row.map((c) => (c == null ? "" : String(c).trim()));
+        const lower = cells.map((c) => c.toLowerCase());
+        const matchedPrimary = HEADER_PRIMARY.filter((k) => lower.some((cell) => cell.includes(k)));
+        const matchedSecondary = HEADER_SECONDARY.filter((k) => lower.some((cell) => cell.includes(k)));
+        const scorePrimary = matchedPrimary.length;
+        const scoreSecondary = matchedSecondary.length;
+        const textCount = cells.filter(Boolean).length;
+        const hasSite = lower.some((c) => c.includes("site name"));
+        const isCandidate = scorePrimary >= 2; // at least two primary keys appear
+
+        if (isCandidate) {
+          const better =
+            scorePrimary > best.primary ||
+            (scorePrimary === best.primary && hasSite && !best.hasSite) ||
+            (scorePrimary === best.primary && scoreSecondary > best.secondary) ||
+            (scorePrimary === best.primary && scoreSecondary === best.secondary && textCount > best.textCount);
+
+          if (better) {
+            best = {
+              index: i,
+              primary: scorePrimary,
+              secondary: scoreSecondary,
+              textCount,
+              hasSite,
+              matched: [...matchedPrimary, ...matchedSecondary],
+            };
+          }
         }
       }
 
+      let headerRowIndex = best.index;
       if (headerRowIndex === -1) {
         console.warn("[FusionSolarParser] Không tìm thấy header FusionSolar hợp lệ trong 10 dòng đầu.");
         return { success: false, message: "Không tìm thấy header FusionSolar hợp lệ (cần ManageObject, Start Time, Active power, Total yield)" };
       }
 
+      console.log(`[FusionSolarParser] Header xác định tại dòng ${headerRowIndex} (primary=${best.primary}, secondary=${best.secondary}, text=${best.textCount}, hasSite=${best.hasSite})`);
       console.log(`[FusionSolarParser] Sử dụng header dòng ${headerRowIndex}`);
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
       if (!rows || rows.length === 0) {

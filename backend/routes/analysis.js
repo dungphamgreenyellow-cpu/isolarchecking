@@ -14,10 +14,13 @@ router.post("/compute", async (req, res) => {
     const file = req.files?.logfile;
     if (!file?.data) return res.status(400).json({ success: false, error: "No logfile uploaded" });
     const result = await streamParseAndCompute(file.data);
+    console.log("[/analysis/compute] Payload nhận:", req.files?.logfile?.name);
+    console.log("[/analysis/compute] Result trả:", result);
     const t1 = process.hrtime.bigint();
     return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
   } catch (e) {
-    return res.status(500).json({ success: false, error: e.message });
+    console.error("[/analysis/compute] Lỗi:", e);
+    return res.status(500).json({ success: false, message: "Backend crash", error: e.message });
   }
 });
 
