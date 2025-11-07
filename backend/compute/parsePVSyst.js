@@ -1,6 +1,8 @@
 import fs from "fs";
-import pdf from "pdf-parse";
+import pkgPdfParse from "pdf-parse";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
+
+const pdf = pkgPdfParse.default || pkgPdfParse; // ✅ hỗ trợ cả CJS và ESM build
 
 // v5.3.2 with pdfjs-dist fallback (FujiSeal confirmed)
 export async function parsePVSystPDF(filePath) {
