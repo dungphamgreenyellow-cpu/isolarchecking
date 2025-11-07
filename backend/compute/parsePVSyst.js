@@ -1,5 +1,4 @@
 import fs from "fs";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
 // PVSyst PDF Parser v5.3.4 — Render-safe, Node20 ESM compatible
 // Primary text extraction: pdf-parse (dynamic import inside function)
@@ -31,11 +30,19 @@ export async function parsePVSystPDF(filePath) {
   // === Fallback to pdfjs-dist if no/short text ===
   if (!pdfText || pdfText.length < 100) {
     used = "pdfjs-dist";
-    const _getDocument = pdfjsLib.getDocument || pdfjsLib.default?.getDocument;
+    // Dynamic import to avoid requiring 'canvas' at startup
+    let pdfjsLib = null;
+    try {
+      const mod = await import("pdfjs-dist/legacy/build/pdf.js").catch(() => null);
+      pdfjsLib = mod?.default || mod;
+    } catch {
+      pdfjsLib = null;
+    }
+    const _getDocument = pdfjsLib?.getDocument || pdfjsLib?.default?.getDocument;
     if (typeof _getDocument !== "function") {
       throw new Error("pdfjsLib.getDocument not available");
     }
-  const doc = await _getDocument({ data: new Uint8Array(buffer) }).promise;
+    const doc = await _getDocument({ data: new Uint8Array(buffer) }).promise;
     const pages = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);

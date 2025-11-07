@@ -19,17 +19,27 @@ export async function parsePDFGlobal(file) {
 
     const lat = d?.gps?.lat ?? d?.latitude ?? null;
     const lon = d?.gps?.lon ?? d?.longitude ?? null;
+    const capacityDC = d?.capacities?.dc_kWp ?? d?.capacity_dc_kwp ?? null;
+    const capacityAC = d?.capacities?.ac_kW ?? d?.capacity_ac_kw ?? null;
+    const moduleModel = d.moduleModel ?? d.module_model ?? null;
+    const inverterModel = d.inverterModel ?? d.inverter_model ?? null;
+
     const normalized = {
       siteName: d.siteName || d.site_name || d.project_name || null,
       gps: lat != null && lon != null ? { lat, lon } : null,
-      // top-level capacity fields for compatibility with ConfirmModal
-      capacity_dc_kwp: d?.capacities?.dc_kWp ?? d?.capacity_dc_kwp ?? null,
-      capacity_ac_kw: d?.capacities?.ac_kW ?? d?.capacity_ac_kw ?? null,
-      module_model: d.moduleModel ?? d.module_model ?? null,
-      inverter_model: d.inverterModel ?? d.inverter_model ?? null,
+      capacity_dc_kwp: capacityDC,
+      capacity_ac_kw: capacityAC,
+      // Backward-compatible keys expected by ProjectConfirmModal
+      capacityDCkWp: capacityDC,
+      capacityACkWac: capacityAC,
+      module_model: moduleModel,
+      inverter_model: inverterModel,
+      pvModuleModel: moduleModel,
+      inverterModel: inverterModel,
       tilt_deg: d.tilt_deg ?? null,
       azimuth_deg: d.azimuth_deg ?? null,
       soiling_loss_percent: d.soiling_loss_percent ?? null,
+      soilingPercent: d.soiling_loss_percent ?? null,
       dc_ac_ratio: d.dc_ac_ratio ?? null,
       _raw: d,
     };

@@ -96,3 +96,33 @@ router.post("/parse-pvsyst", async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// === Dev-only helpers: parse local test files without uploading
+// GET /analysis/compute-test → parse backend/test-data/test_FusionSolar.xlsx
+router.get("/compute-test", async (_req, res) => {
+  try {
+    const p1 = path.join(process.cwd(), "backend/test-data/test_FusionSolar.xlsx");
+    if (!fs.existsSync(p1)) return res.status(404).json({ success: false, error: "Missing backend/test-data/test_FusionSolar.xlsx" });
+    const buf = await fs.promises.readFile(p1);
+    const result = await streamParseAndCompute(buf);
+    return res.json({ success: true, data: result, source: "test-data" });
+  } catch (err) {
+    console.error("[/analysis/compute-test]", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /analysis/parse-pvsyst-test → parse backend/test-data/test_PVSyst.pdf
+router.get("/parse-pvsyst-test", async (_req, res) => {
+  try {
+    const p2 = path.join(process.cwd(), "backend/test-data/test_PVSyst.pdf");
+    if (!fs.existsSync(p2)) return res.status(404).json({ success: false, error: "Missing backend/test-data/test_PVSyst.pdf" });
+    const t0 = performance.now();
+    const info = await parsePVSystPDF(p2);
+    const ms = performance.now() - t0;
+    return res.json({ success: true, ms, data: info, source: "test-data" });
+  } catch (err) {
+    console.error("[/analysis/parse-pvsyst-test]", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});

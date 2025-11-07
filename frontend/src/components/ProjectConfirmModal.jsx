@@ -6,24 +6,26 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
 
   useEffect(() => {
     if (!open) return;
-    setForm((f) => ({
-      ...f,
-      siteName: initialData?.siteName || f.siteName || "",
-      installed: initialData?.capacity || initialData?.installed || f.installed || "",
-      location: initialData?.gps ? `${initialData.gps.lat},${initialData.gps.lon}` : (initialData?.location || f.location || ""),
-      cod: initialData?.cod || f.cod || "",
-      module: initialData?.pvModule || initialData?.module || initialData?.module_model || f.module || "",
-      inverter: initialData?.inverter || initialData?.inverter_model || f.inverter || "",
-      totalModules: initialData?.modules_total != null ? String(initialData.modules_total) : f.totalModules || "",
-      capacityDCkWp: initialData?.capacity_dc_kwp != null ? String(initialData.capacity_dc_kwp) : f.capacityDCkWp || "",
-      capacityACkWac: initialData?.capacity_ac_kw != null ? String(initialData.capacity_ac_kw) : f.capacityACkWac || "",
-      totalInverters: initialData?.inverter_count != null ? String(initialData.inverter_count) : f.totalInverters || "",
-      pvModuleModel: initialData?.module_model || f.pvModuleModel || "",
-      inverterModel: initialData?.inverter_model || f.inverterModel || "",
-      soilingPercent: initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : f.soilingPercent || "",
-      tempCoeff: f.tempCoeff || "0.34",
-      degr: f.degr || "0.5",
-    }));
+    setForm((f) => {
+      const dc = initialData?.capacityDCkWp ?? initialData?.capacity_dc_kwp ?? f.capacityDCkWp;
+      const ac = initialData?.capacityACkWac ?? initialData?.capacity_ac_kw ?? f.capacityACkWac;
+      return {
+        ...f,
+        siteName: initialData?.siteName || f.siteName || "",
+        // Installed capacity default: DC kWp if present
+        installed: initialData?.installed || (dc != null ? `${dc} kWp` : f.installed || ""),
+        location: initialData?.gps ? `${initialData.gps.lat},${initialData.gps.lon}` : (initialData?.location || f.location || ""),
+        cod: initialData?.cod || f.cod || "",
+        capacityDCkWp: dc != null ? String(dc) : f.capacityDCkWp || "",
+        capacityACkWac: ac != null ? String(ac) : f.capacityACkWac || "",
+        // Unified module/inverter model fields
+        pvModuleModel: initialData?.pvModuleModel || initialData?.module_model || initialData?.moduleModel || f.pvModuleModel || "",
+        inverterModel: initialData?.inverterModel || initialData?.inverter_model || initialData?.inverterModel || f.inverterModel || "",
+        soilingPercent: initialData?.soilingPercent != null ? String(initialData.soilingPercent) : (initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : f.soilingPercent || ""),
+        tempCoeff: f.tempCoeff || "0.34",
+        degr: f.degr || "0.5",
+      };
+    });
   }, [open, initialData]);
 
   if (!open) return null;
@@ -58,18 +60,6 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
               value={form.cod} onChange={change("cod")} />
           </label>
 
-          {/* Auto-filled from PVSyst */}
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">Total Modules</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.totalModules} onChange={change("totalModules")} />
-          </label>
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">Total Inverters</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.totalInverters} onChange={change("totalInverters")} />
-          </label>
-
           <label className="col-span-1 text-sm">
             <span className="text-gray-600">DC Capacity (kWp)</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
@@ -80,19 +70,6 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.capacityACkWac} onChange={change("capacityACkWac")} />
           </label>
-
-          <label className="col-span-2 text-sm">
-            <span className="text-gray-600">PV Module</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.module} onChange={change("module")} />
-          </label>
-
-          <label className="col-span-2 text-sm">
-            <span className="text-gray-600">Inverter</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.inverter} onChange={change("inverter")} />
-          </label>
-
           <label className="col-span-2 text-sm">
             <span className="text-gray-600">PV Module Model</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
@@ -103,6 +80,7 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.inverterModel} onChange={change("inverterModel")} />
           </label>
+
 
           <label className="col-span-1 text-sm">
             <span className="text-gray-600">Soiling (%)</span>

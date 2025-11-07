@@ -293,6 +293,28 @@ export default function HomePage() {
 
             <button
               onClick={async () => {
+                try {
+                  // Call dev endpoints to read local test files and open modal
+                  const [c1, c2] = await Promise.all([
+                    fetch(`${backend}/analysis/compute-test`).then((r) => r.json()).catch(() => null),
+                    fetch(`${backend}/analysis/parse-pvsyst-test`).then((r) => r.json()).catch(() => null),
+                  ]);
+                  if (!c1?.success) return alert("Không đọc được test FusionSolar (compute-test)");
+                  const autoInfo = c2?.success ? (c2.data || {}) : {};
+                  const merged = { ...autoInfo, ...(c1.data || {}) };
+                  setProjectData(merged);
+                  setModalOpen(true);
+                } catch (err) {
+                  alert("Dev test failed: " + (err.message || err));
+                }
+              }}
+              className="border border-violet-300 text-violet-700 font-medium px-8 py-3 rounded-xl hover:bg-violet-50 transition"
+            >
+              Run Local Test (test-data)
+            </button>
+
+            <button
+              onClick={async () => {
                 if (!logFile) return alert("Please upload an Actual Log file first!");
                 try {
                   const fd = new FormData();
