@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "start:dev": "nodemon index.js",
-    "build:frontend": "cd ../frontend && npm ci && npm run build && rm -rf ../backend/public && mkdir -p ../backend/public && cp -r dist/* ../backend/public/"
+    "build:frontend": "cd ../frontend && npm ci && npm run build && rm -rf ../backend/public && mkdir -p ../backend/public && cp -r dist/* ../backend/public/",
+    "verify:fs": "node scripts/verifyFusionSolar.js"
   },
   "dependencies": {
     "axios": "^1.12.2",

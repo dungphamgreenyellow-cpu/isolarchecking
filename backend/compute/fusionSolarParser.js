@@ -16,6 +16,8 @@ export async function streamParseAndCompute(buffer) {
   // If XLSX (ZIP signature PK\u0003\u0004), parse via xlsx
   if (buffer?.slice?.(0, 4)?.toString?.() === "PK\u0003\u0004") {
     try {
+      // v9.10-dev — Fix flexible header detection, prevent parse crash
+      console.log("[FusionSolarParser] Đang đọc file XLSX...");
       const wb = XLSX.read(buffer, { type: "buffer" });
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];
@@ -55,14 +57,35 @@ export async function streamParseAndCompute(buffer) {
       const startIdx = (headerRowIndex - range.s.r + 1);
       const dataRows = rows.slice(startIdx);
 
-      // Determine EAC column: ONLY accept exact "Total yield(kWh)"
+  // Flexible header detection: detect Start Time, Total yield(kWh), and Inverter/ManageObject columns
+  // TODO: consider broader localization variants of FusionSolar headers (e.g., non-English)
       const headers = header.map(h => (h == null ? null : String(h)));
-      const totalYieldColIndex = headers.findIndex(
-        (h) => typeof h === "string" && h.trim().toLowerCase() === "total yield(kwh)"
-      );
-      if (totalYieldColIndex === -1) {
-        throw new Error("Không tìm thấy cột Total yield(kWh)");
+      let startTimeCol = -1, totalYieldColIndex = -1, inverterColIndex = -1;
+      headers.forEach((cell, i) => {
+        const txt = (cell || "").toString().trim().toLowerCase();
+        if (/start\s*time/i.test(txt)) startTimeCol = i;
+        if (/total.*yield.*kwh/i.test(txt)) totalYieldColIndex = i;
+        // Prefer specific known headers; avoid matching 'Management Domain'
+        if (txt === 'manageobject' || txt === 'device name' || txt === 'inverter' || txt === 'inverter name') {
+          inverterColIndex = i;
+        }
+      });
+
+      // If not found by exact known headers, try a safer fallback that won't match 'management domain'
+      if (inverterColIndex === -1) {
+        headers.forEach((cell, i) => {
+          const txt = (cell || "").toString().trim().toLowerCase();
+          if (/(manageobject|device name|inverter|inverter name)/i.test(txt)) inverterColIndex = i;
+        });
       }
+
+      if (startTimeCol === -1 || totalYieldColIndex === -1 || inverterColIndex === -1) {
+        console.warn("[FusionSolarParser] Header thiếu:", headers);
+        // NOTE: return non-throwing failure so FE can show friendly message
+        return { success: false, message: "Header thiếu cột bắt buộc", hint: headers };
+      }
+
+      console.log("[FusionSolarParser] Header phát hiện:", headers.slice(0, 10));
 
   const tKeys = ["Start Time", "StartTime", "Time", "Timestamp"];
   const invKeys = ["ManageObject", "Device name", "Inverter", "Inverter Name"];
@@ -103,9 +126,11 @@ export async function streamParseAndCompute(buffer) {
 
       // Determine ManageObject column index from headers
       const manageHeaderCandidates = ["ManageObject", "Device name", "Inverter", "Inverter Name"];
-      const manageObjectColIndex = manageHeaderCandidates
-        .map((h) => headers.indexOf(h))
-        .find((i) => i !== -1);
+      const manageObjectColIndex = (inverterColIndex !== -1)
+        ? inverterColIndex
+        : manageHeaderCandidates
+            .map((h) => headers.indexOf(h))
+            .find((i) => i !== -1);
 
       const rawManageObjects = (manageObjectColIndex != null)
         ? dataRows.map((r) => r?.[manageObjectColIndex]).filter((v) => v != null)
@@ -129,9 +154,10 @@ export async function streamParseAndCompute(buffer) {
           obj[key] = r[i] === undefined ? null : r[i];
         }
         // pick required fields
-        const rawT = tKeys.map((k) => obj[k]).find((v) => v != null && v !== "");
-        const rawMo = (manageObjectColIndex != null) ? r[manageObjectColIndex] : invKeys.map((k) => obj[k]).find((v) => v != null && v !== "");
-        const rawEac = r[totalYieldColIndex];
+  // Prefer detected header indices; fall back to key lookup
+  const rawT = (startTimeCol !== -1) ? r[startTimeCol] : tKeys.map((k) => obj[k]).find((v) => v != null && v !== "");
+  const rawMo = (manageObjectColIndex != null) ? r[manageObjectColIndex] : invKeys.map((k) => obj[k]).find((v) => v != null && v !== "");
+  const rawEac = (totalYieldColIndex !== -1) ? r[totalYieldColIndex] : null;
         if (!rawT || !rawMo || rawEac == null) continue;
 
         const day = toYMD(rawT);

@@ -52,7 +52,7 @@ export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, deb
       eirr = irrRecords.reduce((a, b) => a + b, 0) / 12 / 1000; // normalize & convert W→kWh
     }
 
-    // --- 4. Normalize Eac to kWh ---
+  // --- 4. Normalize Eac to kWh ---
     const Eac_kWh = eac / 12; // 5-min logs → 12 intervals/hour
     const Eirr_kWhm2 = eirr;
 
@@ -68,12 +68,64 @@ export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, deb
       console.log("RPR (%):", pr.toFixed(2));
     }
 
+    // --- 6. Build Daily RPR series ---
+    const dailySeries = [];
+    const groupedByDay = {};
+
+    const getDay = (rec) => {
+      const t = rec.timestamp || rec["Start Time"] || rec["StartTime"] || rec["Time"] || rec["Timestamp"];
+      if (!t) return null;
+      try {
+        const d = new Date(t);
+        if (isNaN(d)) return null;
+        return d.toISOString().split("T")[0];
+      } catch { return null; }
+    };
+
+    // Group valid records by day
+    for (const r of validRecords) {
+      const day = getDay(r);
+      if (!day) continue;
+      if (!groupedByDay[day]) groupedByDay[day] = [];
+      groupedByDay[day].push(r);
+    }
+
+    const powerKeyRegex = /(activepower|outputpower|pac|power\(kw\)|feedinpower|totalpower)/i;
+    const irrKeyRegex = /(irradiance|ghi|gti|solar)/i;
+
+    for (const day of Object.keys(groupedByDay).sort()) {
+      const recs = groupedByDay[day];
+      // per-day EAC (sum power then ÷12)
+      const eacDayRaw = recs.reduce((sum, r) => {
+        const keys = Object.keys(r).filter((k) => powerKeyRegex.test(k));
+        let p = 0;
+        keys.forEach((k) => {
+          const v = parseFloat(r[k]);
+          if (!isNaN(v)) p += v;
+        });
+        return sum + p;
+      }, 0);
+      const eacDay = eacDayRaw / 12;
+
+      // per-day EIRR (prefer log irradiance; ÷12 ÷1000)
+      const eirrDayRaw = recs.reduce((sum, r) => {
+        const k = Object.keys(r).find((key) => irrKeyRegex.test(key));
+        const v = k ? parseFloat(r[k]) : NaN;
+        return sum + (isNaN(v) ? 0 : v);
+      }, 0);
+      const eirrDay = eirrDayRaw / 12 / 1000;
+
+      const rprDay = eirrDay > 0 && capacity > 0 ? (eacDay / (eirrDay * capacity)) * 100 : 0;
+      dailySeries.push({ date: day, RPR: parseFloat(rprDay.toFixed(2)), Eac: parseFloat(eacDay.toFixed(2)), Eirr: parseFloat(eirrDay.toFixed(3)) });
+    }
+
     return {
       RPR: parseFloat(pr.toFixed(2)),
       Eac_kWh: parseFloat(Eac_kWh.toFixed(2)),
       Eirr_kWhm2: parseFloat(Eirr_kWhm2.toFixed(3)),
       capacity,
       totalSlots,
+      dailySeries,
     };
   } catch (err) {
     console.error("⚠️ RPR compute error:", err.message);

@@ -153,8 +153,9 @@ export default function Report() {
           const res = json.data || json.rpr || json.details || json;
           // res should be an object with RPR field from /analysis/realpr
           setRealPR(res?.RPR ?? "0.00");
-          // daily series not provided by backend today
-          setDailyRPR(res?.series || []);
+          // pick dailySeries from backend if available
+          const dailySeries = res?.dailySeries || [];
+          setDailyRPR(dailySeries);
         }
       } catch (err) {
         console.error("RPR calc error:", err);
