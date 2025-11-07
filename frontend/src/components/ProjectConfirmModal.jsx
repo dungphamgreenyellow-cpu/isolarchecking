@@ -2,44 +2,28 @@
 import React, { useEffect, useState } from "react";
 
 export default function ProjectConfirmModal({ open, initialData = {}, onConfirm, onClose }) {
-  const [form, setForm] = useState({
-    siteName: "",
-    installed: "",
-    location: "",
-    cod: "",
-    module: "",
-    inverter: "",
-    // Auto-filled from PVSyst (allow override)
-    totalModules: "",
-    capacityDCkWp: "",
-    capacityACkWac: "",
-    totalInverters: "",
-    pvModuleModel: "",
-    inverterModel: "",
-    soilingPercent: "",
-    tempCoeff: "0.34",
-    degr: "0.5",
-  });
+  const [form, setForm] = useState(initialData || {});
 
   useEffect(() => {
     if (!open) return;
-    setForm({
-      siteName: initialData?.siteName || "",
-      installed: initialData?.capacity || initialData?.installed || "",
-      location: initialData?.location || "",
-      cod: initialData?.cod || "",
-      module: initialData?.pvModule || initialData?.module || initialData?.module_model || "",
-      inverter: initialData?.inverter || initialData?.inverter_model || "",
-      totalModules: initialData?.modules_total != null ? String(initialData.modules_total) : "",
-      capacityDCkWp: initialData?.capacity_dc_kwp != null ? String(initialData.capacity_dc_kwp) : "",
-      capacityACkWac: initialData?.capacity_ac_kw != null ? String(initialData.capacity_ac_kw) : "",
-      totalInverters: initialData?.inverter_count != null ? String(initialData.inverter_count) : "",
-      pvModuleModel: initialData?.module_model || "",
-      inverterModel: initialData?.inverter_model || "",
-      soilingPercent: initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : "",
-      tempCoeff: "0.34",
-      degr: "0.5",
-    });
+    setForm((f) => ({
+      ...f,
+      siteName: initialData?.siteName || f.siteName || "",
+      installed: initialData?.capacity || initialData?.installed || f.installed || "",
+      location: initialData?.gps ? `${initialData.gps.lat},${initialData.gps.lon}` : (initialData?.location || f.location || ""),
+      cod: initialData?.cod || f.cod || "",
+      module: initialData?.pvModule || initialData?.module || initialData?.module_model || f.module || "",
+      inverter: initialData?.inverter || initialData?.inverter_model || f.inverter || "",
+      totalModules: initialData?.modules_total != null ? String(initialData.modules_total) : f.totalModules || "",
+      capacityDCkWp: initialData?.capacity_dc_kwp != null ? String(initialData.capacity_dc_kwp) : f.capacityDCkWp || "",
+      capacityACkWac: initialData?.capacity_ac_kw != null ? String(initialData.capacity_ac_kw) : f.capacityACkWac || "",
+      totalInverters: initialData?.inverter_count != null ? String(initialData.inverter_count) : f.totalInverters || "",
+      pvModuleModel: initialData?.module_model || f.pvModuleModel || "",
+      inverterModel: initialData?.inverter_model || f.inverterModel || "",
+      soilingPercent: initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : f.soilingPercent || "",
+      tempCoeff: f.tempCoeff || "0.34",
+      degr: f.degr || "0.5",
+    }));
   }, [open, initialData]);
 
   if (!open) return null;

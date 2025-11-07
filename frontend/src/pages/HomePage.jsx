@@ -345,6 +345,7 @@ export default function HomePage() {
         irrFile={irrFile}
         onClose={() => setFileCheckOpen(false)}
         onNext={handleFileCheckNext}
+        setProjectInfo={(info) => setProjectData((d) => ({ ...d, ...info }))}
       />
 
       <ProjectConfirmModal

@@ -5,11 +5,12 @@
 // ✅ Đồng bộ logic với parser v9.9-LTS
 
 import React, { useEffect, useState } from "react";
+import { parsePDFGlobal } from "../utils/parsePDFGlobal";
 
 // Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
 // (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
 
-export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onNext }) {
+export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onNext, setProjectInfo }) {
   const [checking, setChecking] = useState(false);
   const [logResult, setLogResult] = useState(null); // raw parse payload (data.data)
   const [logStatus, setLogStatus] = useState({ ok: false, msg: "" }); // simplified status object
@@ -52,9 +53,19 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       }
 
       if (pvsystFile) {
-        // Không parse PDF ở FE nữa — chỉ kiểm tra basic theo phần mở rộng
         const ok = /\.pdf$/i.test(pvsystFile.name || "");
-        pvRes = { valid: ok, message: ok ? "PVSyst PDF detected" : "Invalid PDF" };
+        if (ok) {
+          const pdfInfo = await parsePDFGlobal(pvsystFile);
+          if (pdfInfo) {
+            console.log("[FileCheckModal] Parsed PDF info:", pdfInfo);
+            setProjectInfo && setProjectInfo(pdfInfo);
+            pvRes = { valid: true, message: "PVSyst PDF parsed" };
+          } else {
+            pvRes = { valid: false, message: "Failed to parse PDF" };
+          }
+        } else {
+          pvRes = { valid: false, message: "Invalid PDF" };
+        }
       }
 
       setLogResult(logRes);
