@@ -15,7 +15,8 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
         // Installed capacity default: DC kWp if present
         installed: initialData?.installed || (dc != null ? `${dc} kWp` : f.installed || ""),
         location: initialData?.gps ? `${initialData.gps.lat},${initialData.gps.lon}` : (initialData?.location || f.location || ""),
-        cod: initialData?.cod || f.cod || "",
+  // COD date (report date) -> store in codDate; accept existing cod/codDate
+  codDate: initialData?.codDate || initialData?.cod || f.codDate || "",
         capacityDCkWp: dc != null ? String(dc) : f.capacityDCkWp || "",
         capacityACkWac: ac != null ? String(ac) : f.capacityACkWac || "",
         // Unified module/inverter model fields
@@ -43,14 +44,15 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
               value={form.siteName} onChange={change("siteName")} />
           </label>
           <label className="col-span-1 text-sm">
-            <span className="text-gray-600">Installed Capacity</span>
+            <span className="text-gray-600">Installed Capacity (kWp)</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.installed} onChange={change("installed")} />
           </label>
           <label className="col-span-2 text-sm">
             <span className="text-gray-600">COD Date</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.cod} onChange={change("cod")} />
+            <input type="date" className="mt-1 w-full border rounded-lg px-3 py-2"
+              value={form.codDate}
+              onChange={change("codDate")} />
           </label>
           <label className="col-span-1 text-sm">
             <span className="text-gray-600">Temperature Coefficient (γ, %/°C)</span>
