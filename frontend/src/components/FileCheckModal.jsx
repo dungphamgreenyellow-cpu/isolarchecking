@@ -24,12 +24,27 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       try {
         if (logFile) {
           const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
+          if (!backendURL) {
+            console.warn("⚠️ [FileCheckModal] Missing backend URL (VITE_BACKEND_URL). Using relative URL may fail due to CORS.");
+          }
           const formData = new FormData();
           formData.append("logfile", logFile);
-          const res = await fetch(`${backendURL}/analysis/compute`, {
-            method: "POST",
-            body: formData,
-          });
+          const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
+            let lastErr = null;
+            for (let i = 0; i < retries; i++) {
+              try {
+                const r = await fetch(url, options);
+                return r;
+              } catch (e) {
+                lastErr = e;
+                const d = delays[i] || 1000;
+                await new Promise((res) => setTimeout(res, d));
+              }
+            }
+            throw lastErr || new Error("Network error");
+          };
+
+          const res = await fetchWithRetry(`${backendURL}/analysis/compute`, { method: "POST", body: formData });
           let data = null;
           try {
             data = await res.json();
@@ -48,8 +63,8 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
         }
       } catch (err) {
         console.error("[FileCheckModal] Upload error:", err);
-        setLogStatus({ ok: false, msg: "Server not reachable" });
-        logRes = { success: false, message: "Server not reachable" };
+        setLogStatus({ ok: false, msg: "Server not reachable. Please check backend URL or CORS." });
+        logRes = { success: false, message: "Server not reachable. Please check backend URL or CORS." };
       }
 
       if (pvsystFile) {
