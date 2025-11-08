@@ -6,20 +6,32 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
 
   useEffect(() => {
     if (!open) return;
+    const normalizeDate = (val) => {
+      if (!val) return "";
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+        const [mm, dd, yyyy] = val.split("/");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
+        const [dd, mm, yyyy] = val.split(".");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
+        return val.replaceAll("/", "-");
+      }
+      return val;
+    };
     setForm((f) => {
       const dc = initialData?.capacityDCkWp ?? initialData?.capacity_dc_kwp ?? f.capacityDCkWp;
       const ac = initialData?.capacityACkWac ?? initialData?.capacity_ac_kw ?? f.capacityACkWac;
       return {
         ...f,
         siteName: initialData?.siteName || f.siteName || "",
-        // Installed capacity default: DC kWp if present
         installed: initialData?.installed || (dc != null ? `${dc} kWp` : f.installed || ""),
         location: initialData?.gps ? `${initialData.gps.lat},${initialData.gps.lon}` : (initialData?.location || f.location || ""),
-  // COD date (report date) -> store in codDate; accept existing cod/codDate
-  codDate: initialData?.codDate || initialData?.cod || f.codDate || "",
+        codDate: normalizeDate(initialData?.codDate || initialData?.cod || f.codDate || ""),
         capacityDCkWp: dc != null ? String(dc) : f.capacityDCkWp || "",
         capacityACkWac: ac != null ? String(ac) : f.capacityACkWac || "",
-        // Unified module/inverter model fields
         pvModuleModel: initialData?.pvModuleModel || initialData?.module_model || initialData?.moduleModel || f.pvModuleModel || "",
         inverterModel: initialData?.inverterModel || initialData?.inverter_model || initialData?.inverterModel || f.inverterModel || "",
         soilingPercent: initialData?.soilingPercent != null ? String(initialData.soilingPercent) : (initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : f.soilingPercent || ""),
@@ -27,6 +39,7 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
         degr: f.degr || "0.5",
       };
     });
+    console.log("[ProjectConfirmModal] initialData synced:", initialData);
   }, [open, initialData]);
 
   if (!open) return null;

@@ -73,7 +73,39 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           const pdfInfo = await parsePDFGlobal(pvsystFile);
           if (pdfInfo) {
             console.log("[FileCheckModal] Parsed PDF info:", pdfInfo);
-            setProjectInfo && setProjectInfo(pdfInfo);
+            // Auto-fill Installed Capacity and COD Date if available from PDF
+            const overrides = {};
+            // Installed = DC kWp
+            if (pdfInfo?.capacity_dc_kwp != null) {
+              overrides.installed = `${pdfInfo.capacity_dc_kwp} kWp`;
+              overrides.capacityDCkWp = String(pdfInfo.capacity_dc_kwp);
+            }
+            // Normalize COD date to ISO (YYYY-MM-DD) for <input type="date">
+            const toISO = (val) => {
+              if (!val) return "";
+              // MM/DD/YYYY -> YYYY-MM-DD
+              if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+                const [mm, dd, yyyy] = val.split("/");
+                return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+              }
+              // 21.12.2022 -> 2022-12-21
+              if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
+                const [dd, mm, yyyy] = val.split(".");
+                return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+              }
+              // 2022/12/21 -> 2022-12-21
+              if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
+                return val.replaceAll("/", "-");
+              }
+              return val; // assume already ISO
+            };
+            if (pdfInfo?.cod_date || pdfInfo?.codDate) {
+              const raw = pdfInfo.cod_date ?? pdfInfo.codDate;
+              overrides.codDate = toISO(raw);
+            }
+            const merged = { ...pdfInfo, ...overrides };
+            console.log("[FileCheckModal] merged projectInfo:", merged);
+            setProjectInfo && setProjectInfo(merged);
             pvRes = { valid: true, message: "PVSyst PDF parsed" };
           } else {
             pvRes = { valid: false, message: "Failed to parse PDF" };
