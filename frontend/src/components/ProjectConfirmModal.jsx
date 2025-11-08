@@ -31,7 +31,6 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
   if (!open) return null;
 
   const change = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6">
@@ -48,46 +47,11 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.installed} onChange={change("installed")} />
           </label>
-
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">Location (GPS)</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.location} onChange={change("location")} />
-          </label>
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">COD / Report Date</span>
+          <label className="col-span-2 text-sm">
+            <span className="text-gray-600">COD Date</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
               value={form.cod} onChange={change("cod")} />
           </label>
-
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">DC Capacity (kWp)</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.capacityDCkWp} onChange={change("capacityDCkWp")} />
-          </label>
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">AC Capacity (kWac)</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.capacityACkWac} onChange={change("capacityACkWac")} />
-          </label>
-          <label className="col-span-2 text-sm">
-            <span className="text-gray-600">PV Module Model</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.pvModuleModel} onChange={change("pvModuleModel")} />
-          </label>
-          <label className="col-span-2 text-sm">
-            <span className="text-gray-600">Inverter Model</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.inverterModel} onChange={change("inverterModel")} />
-          </label>
-
-
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">Soiling (%)</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.soilingPercent} onChange={change("soilingPercent")} />
-          </label>
-
           <label className="col-span-1 text-sm">
             <span className="text-gray-600">Temperature Coefficient (γ, %/°C)</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"
