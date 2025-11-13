@@ -1,5 +1,4 @@
-// backend/compute/fusionSolarParser.js — CSV Streaming Parser (fast baseline)
-import { Readable } from "stream";
+// backend/compute/fusionSolarParser.js — XLSX -> CSV -> streaming parse
 import { parse } from "csv-parse";
 import * as XLSX from "xlsx";
 
@@ -13,175 +12,91 @@ const toYMD = (d) => {
 };
 
 export async function streamParseAndCompute(buffer) {
-  // If XLSX (ZIP signature PK\u0003\u0004), parse via xlsx
+  // Only handle XLSX by converting to CSV, then parse via csv-parse
   if (buffer?.slice?.(0, 4)?.toString?.() === "PK\u0003\u0004") {
     try {
-      // v9.10-dev — Fix flexible header detection, prevent parse crash
-      console.log("[FusionSolarParser] Đang đọc file XLSX...");
       const wb = XLSX.read(buffer, { type: "buffer" });
       const wsName = wb.SheetNames[0];
       const ws = wb.Sheets[wsName];
-      // === [v9.9-Flex++ Optimized Header Detection] with tie-break preference for 'Site Name' and rich text rows ===
-      const HEADER_PRIMARY = ["manageobject", "start time", "active power", "total yield"];
-      const HEADER_SECONDARY = ["device", "inverter", "energy", "power", "voltage", "current", "site name"]; // helpers
+      if (!ws) return { success: false, note: "Empty XLSX worksheet" };
 
-      let best = { index: -1, primary: -1, secondary: -1, textCount: -1, hasSite: false, matched: [] };
-      for (let i = 0; i < 10; i++) {
-        const row = XLSX.utils.sheet_to_json(ws, { header: 1, range: i, raw: false })[0];
-        if (!row) continue;
-        const cells = row.map((c) => (c == null ? "" : String(c).trim()));
-        const lower = cells.map((c) => c.toLowerCase());
-        const matchedPrimary = HEADER_PRIMARY.filter((k) => lower.some((cell) => cell.includes(k)));
-        const matchedSecondary = HEADER_SECONDARY.filter((k) => lower.some((cell) => cell.includes(k)));
-        const scorePrimary = matchedPrimary.length;
-        const scoreSecondary = matchedSecondary.length;
-        const textCount = cells.filter(Boolean).length;
-        const hasSite = lower.some((c) => c.includes("site name"));
-        const isCandidate = scorePrimary >= 2; // at least two primary keys appear
+      // Convert first sheet to CSV string
+      const csvString = XLSX.utils.sheet_to_csv(ws, { FS: ",", RS: "\n" });
 
-        if (isCandidate) {
-          const better =
-            scorePrimary > best.primary ||
-            (scorePrimary === best.primary && hasSite && !best.hasSite) ||
-            (scorePrimary === best.primary && scoreSecondary > best.secondary) ||
-            (scorePrimary === best.primary && scoreSecondary === best.secondary && textCount > best.textCount);
+      // Parse CSV into records (array of arrays)
+      const records = await new Promise((resolve, reject) => {
+        parse(csvString, { columns: false, relax_column_count: true, skip_empty_lines: true }, (err, out) => {
+          if (err) reject(err);
+          else resolve(out);
+        });
+      });
+      if (!records || records.length === 0) return { success: false, note: "Empty CSV after XLSX conversion" };
 
-          if (better) {
-            best = {
-              index: i,
-              primary: scorePrimary,
-              secondary: scoreSecondary,
-              textCount,
-              hasSite,
-              matched: [...matchedPrimary, ...matchedSecondary],
-            };
-          }
+      // Header detection: scan first 10 lines; prefer row index = 3 if it matches required headers
+      const REQUIRED = ["start time", "total yield(kwh)", "manageobject"];
+      let headerRowIndex = -1;
+      let bestScore = -1;
+      for (let i = 0; i < Math.min(10, records.length); i++) {
+        const row = (records[i] || []).map((c) => (c == null ? "" : String(c))).map((s) => s.trim());
+        const lower = row.map((s) => s.toLowerCase());
+        const score = REQUIRED.reduce((acc, key) => acc + (lower.some((cell) => cell.includes(key)) ? 1 : 0), 0);
+        // Prefer index 3 if it fully matches (>80% of 3 → 3)
+        if (i === 3 && score >= 3) {
+          headerRowIndex = i;
+          bestScore = score;
+          break;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          headerRowIndex = i;
         }
       }
-
-      let headerRowIndex = best.index;
-      if (headerRowIndex === -1) {
-        console.warn("[FusionSolarParser] Không tìm thấy header FusionSolar hợp lệ trong 10 dòng đầu.");
-        return { success: false, message: "Không tìm thấy header FusionSolar hợp lệ (cần ManageObject, Start Time, Active power, Total yield)" };
+      if (headerRowIndex === -1 || bestScore <= 0) {
+        return { success: false, message: "Không tìm thấy header FusionSolar hợp lệ trong 10 dòng đầu" };
       }
 
-      console.log(`[FusionSolarParser] Header xác định tại dòng ${headerRowIndex} (primary=${best.primary}, secondary=${best.secondary}, text=${best.textCount}, hasSite=${best.hasSite})`);
-      console.log(`[FusionSolarParser] Sử dụng header dòng ${headerRowIndex}`);
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      if (!rows || rows.length === 0) {
-        return { success: false, note: "Empty XLSX worksheet" };
-      }
-      const header = (rows[headerRowIndex] || []).map((h) => (typeof h === "string" ? h.trim() : h));
-      const startIdx = headerRowIndex + 1;
-      const dataRows = rows.slice(startIdx);
+      const header = (records[headerRowIndex] || []).map((h) => (h == null ? null : String(h).trim()));
+      const headers = header.map((h) => (h == null ? null : String(h)));
 
-  // Flexible header detection: detect Start Time, Total yield(kWh), and Inverter/ManageObject columns
-  // TODO: consider broader localization variants of FusionSolar headers (e.g., non-English)
-  const headers = header.map(h => (h == null ? null : String(h)));
-  console.log("[FusionSolarParser] Headers đọc được:", headers);
-      let startTimeCol = -1, totalYieldColIndex = -1, inverterColIndex = -1;
+      // Locate required columns
+      let startTimeCol = -1;
+      let totalYieldColIndex = -1;
+      let inverterColIndex = -1;
       headers.forEach((cell, i) => {
         const txt = (cell || "").toString().trim().toLowerCase();
-        if (/start\s*time/i.test(txt)) startTimeCol = i;
-        if (/total.*yield.*kwh/i.test(txt)) totalYieldColIndex = i;
-        // Prefer specific known headers; avoid matching 'Management Domain'
-        if (txt === 'manageobject' || txt === 'device name' || txt === 'inverter' || txt === 'inverter name') {
-          inverterColIndex = i;
-        }
+        if (/start\s*time/.test(txt)) startTimeCol = i;
+        if (/total\s*yield.*kwh/.test(txt)) totalYieldColIndex = i;
+        if (txt === "manageobject" || txt === "device name" || txt === "inverter" || txt === "inverter name") inverterColIndex = i;
       });
-
-      // If not found by exact known headers, try a safer fallback that won't match 'management domain'
       if (inverterColIndex === -1) {
         headers.forEach((cell, i) => {
           const txt = (cell || "").toString().trim().toLowerCase();
-          if (/(manageobject|device name|inverter|inverter name)/i.test(txt)) inverterColIndex = i;
+          if (/(manageobject|device name|inverter|inverter name)/.test(txt)) inverterColIndex = i;
         });
       }
-
       if (startTimeCol === -1 || totalYieldColIndex === -1 || inverterColIndex === -1) {
-        console.warn("[FusionSolarParser] Header thiếu:", headers);
-        // NOTE: return non-throwing failure so FE can show friendly message
         return { success: false, message: "Header thiếu cột bắt buộc", hint: headers };
       }
 
-      console.log("[FusionSolarParser] Header phát hiện:", headers.slice(0, 10));
-
-  const tKeys = ["Start Time", "StartTime", "Time", "Timestamp"];
-  const invKeys = ["ManageObject", "Device name", "Inverter", "Inverter Name"];
-
-      const colCount = header.length;
-      const toYMD = (val) => {
-        try {
-          if (typeof val === "number") {
-            // Excel date serial → format then to Date
-            const s = XLSX.SSF.format("yyyy-mm-dd HH:MM:ss", val);
-            const d = new Date(s.replace(/\//g, "-"));
-            const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2, "0"); const day = String(d.getDate()).padStart(2, "0");
-            return `${y}-${m}-${day}`;
-          }
-          if (typeof val === "string") {
-            const d = new Date(val);
-            if (!isNaN(d)) { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
-          }
-        } catch {}
-        return null;
-      };
-
-      // === Inverter normalization based on unique tokens across all ManageObject values ===
-      function tokenize(str) {
-        return String(str)
-          .split(/[\s\/\-()_]+/)
-          .filter(Boolean);
-      }
-      function extractUniqueTokens(allManageObjects) {
-        const freq = {};
-        for (const obj of allManageObjects) {
-          const tokens = new Set(tokenize(obj));
-          for (const t of tokens) freq[t] = (freq[t] || 0) + 1;
-        }
-        const totalObjs = allManageObjects.length || 1;
-        return Object.keys(freq).filter((t) => freq[t] < totalObjs);
-      }
-
-      // Determine ManageObject column index from headers
-      const manageHeaderCandidates = ["ManageObject", "Device name", "Inverter", "Inverter Name"];
-      const manageObjectColIndex = (inverterColIndex !== -1)
-        ? inverterColIndex
-        : manageHeaderCandidates
-            .map((h) => headers.indexOf(h))
-            .find((i) => i !== -1);
-
-      const rawManageObjects = (manageObjectColIndex != null)
-        ? dataRows.map((r) => r?.[manageObjectColIndex]).filter((v) => v != null)
-        : [];
-      const uniqueTokens = extractUniqueTokens(rawManageObjects);
-      function normalizeInverterName(raw) {
-        const tokens = tokenize(raw);
-        const diff = tokens.find((t) => uniqueTokens.includes(t));
-        return `INV-${diff}`;
-      }
-
-      const invDayMap = {}; // { day: { INV-*: {min, max} } }
+      // Parse data rows
+      const startIdx = headerRowIndex + 1;
+      const invDayMap = {};
       let parsedRecordsCount = 0;
 
-      for (const r of dataRows) {
-        if (!r || r.length === 0) continue;
-        // Build a tiny object map for key lookup convenience
-        const obj = {};
-        for (let i = 0; i < colCount; i++) {
-          const key = header[i] ?? `__col_${i}`;
-          obj[key] = r[i] === undefined ? null : r[i];
-        }
-        // pick required fields
-  // Prefer detected header indices; fall back to key lookup
-  const rawT = (startTimeCol !== -1) ? r[startTimeCol] : tKeys.map((k) => obj[k]).find((v) => v != null && v !== "");
-  const rawMo = (manageObjectColIndex != null) ? r[manageObjectColIndex] : invKeys.map((k) => obj[k]).find((v) => v != null && v !== "");
-  const rawEac = (totalYieldColIndex !== -1) ? r[totalYieldColIndex] : null;
-        if (!rawT || !rawMo || rawEac == null) continue;
+      for (let r = startIdx; r < records.length; r++) {
+        const row = records[r];
+        if (!row || row.length === 0) continue;
+
+        const rawT = row[startTimeCol];
+        const rawMo = row[inverterColIndex];
+        const rawEac = row[totalYieldColIndex];
+        if (rawT == null || rawMo == null || rawEac == null) continue;
 
         const day = toYMD(rawT);
         if (!day) continue;
-        const inv = normalizeInverterName(rawMo);
+
+        // Normalize inverter: take token before '/'
+        const inv = String(rawMo).split("/")[0].trim();
         const val = Number(String(rawEac).replace(/[, ]/g, ""));
         if (!Number.isFinite(val)) continue;
 
@@ -194,8 +109,8 @@ export async function streamParseAndCompute(buffer) {
         parsedRecordsCount++;
       }
 
+      // Aggregate daily production (max-min per inverter)
       const daily = {};
-      let dailyProductionTotal = 0;
       for (const day of Object.keys(invDayMap)) {
         let sum = 0;
         for (const inv of Object.keys(invDayMap[day])) {
@@ -205,9 +120,7 @@ export async function streamParseAndCompute(buffer) {
         }
         daily[day] = sum;
       }
-      for (const d in daily) dailyProductionTotal += daily[d];
 
-      // Determine overall first/last day from aggregated daily keys
       const dayKeys = Object.keys(daily).sort();
       const firstDay = dayKeys.length ? dayKeys[0] : null;
       const lastDay = dayKeys.length ? dayKeys[dayKeys.length - 1] : null;
@@ -215,7 +128,7 @@ export async function streamParseAndCompute(buffer) {
       return {
         success: true,
         dailyProduction: daily,
-        dailyProductionTotal,
+        dailyProductionTotal: dayKeys.reduce((acc, d) => acc + (daily[d] || 0), 0),
         firstDay,
         lastDay,
         parsedRecordsCount,
@@ -225,5 +138,5 @@ export async function streamParseAndCompute(buffer) {
       return { success: false, note: `XLSX parse failed: ${err?.message || err}` };
     }
   }
-  // CSV path removed — XLSX-only parser
+  // CSV path removed — only handle XLSX via CSV conversion
 }
