@@ -9,7 +9,6 @@ import { useNavigate } from "react-router-dom";
 // removed legacy api helpers; all calls use fetch/axios directly
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
-import WorkerUrl from "../workers/fsXlsxWorker?worker";
 
 // Backend base URL
 const backend = import.meta.env.VITE_BACKEND_URL;
@@ -25,36 +24,7 @@ function inferCountryFromLocation(str = "") {
   return "Vietnam";
 }
 
-// === TestBackendButton ===
-function TestBackendButton() {
-  const [reply, setReply] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const pingCloud = async () => {
-    setLoading(true);
-    try {
-  const res = await fetch(`${backend}/`);
-      const text = await res.text();
-      setReply("✅ " + text);
-    } catch (err) {
-      setReply("❌ " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="mt-4 text-center">
-      <button
-        onClick={pingCloud}
-        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition"
-      >
-        {loading ? "Testing..." : "Test backend"}
-      </button>
-      {reply && <p className="text-xs text-gray-600 mt-2">{reply}</p>}
-    </div>
-  );
-}
+// (Test buttons removed)
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -68,24 +38,7 @@ export default function HomePage() {
   const [error, setError] = useState(null);
   const [parsedRecords, setParsedRecords] = useState(null);
 
-  async function parseFullXLSXInWorker(file) {
-    return new Promise((resolve, reject) => {
-      try {
-        const worker = new WorkerUrl();
-        worker.onmessage = (e) => {
-          if (e.data?.error) reject(new Error(e.data.error));
-          else resolve(e.data);
-          worker.terminate();
-        };
-        const reader = new FileReader();
-        reader.onload = () => worker.postMessage(reader.result);
-        reader.onerror = () => reject(new Error("Failed to read XLSX as ArrayBuffer"));
-        reader.readAsArrayBuffer(file);
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
+  // Removed XLSX worker parsing — rely on backend compute only
 
   // STEP 4 — AUTO OPEN CONFIRM MODAL WHEN PARSE SUCCESS
   const handleStartAnalyze = async () => {
@@ -124,23 +77,8 @@ export default function HomePage() {
     setChecking(true);
 
     try {
-      let autoInfo = {};
-
-      // ✅ Parse PVSyst on backend
-      if (pvsystFile) {
-        const fd = new FormData();
-        fd.append("file", pvsystFile);
-        const res = await fetch(`${backend}/api/parse-pvsyst`, {
-          method: "POST",
-          body: fd,
-        });
-        const json = await res.json();
-        autoInfo = json?.data || {};
-      }
-
       const merged = {
-        ...autoInfo,      // from PVSyst
-        ...parsedData,    // quick parse from FileCheckModal
+        ...parsedData,    // data + pvsyst info merged in FileCheckModal
         actualProduction: parsedData?.totalProduction ?? 0,
         dailyProduction: parsedData?.dailyProduction ?? [],
       };
@@ -148,7 +86,6 @@ export default function HomePage() {
       setProjectData(merged);
       setModalOpen(true);
     } catch (err) {
-      console.error(err);
       setProjectData(parsedData || {});
       setModalOpen(true);
     } finally {
@@ -160,50 +97,13 @@ export default function HomePage() {
     try {
       if (!logFile) throw new Error("Please upload a FusionSolar log file.");
 
-      let parsed = null;
-      if (logFile && /\.xlsx?$/i.test(logFile.name)) {
-        parsed = await parseFullXLSXInWorker(logFile);
-        setParsedRecords(parsed.records || null);
-        console.log("[DEBUG] Parsed XLSX records:", parsed.records?.length);
-      }
-
       // Existing compute call (kept)
       const fd = new FormData();
       fd.append("logfile", logFile);
       if (pvsystFile) fd.append("pvsyst", pvsystFile);
-  const computeRes = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
+      const computeRes = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
       const computeJson = await computeRes.json();
-  console.log("[DEBUG] Compute result:", computeJson);
-
-      // RPR using FULL records with capacity if available
-      let rprJson = null;
-      if (parsed?.records?.length) {
-        // Capacity priority: DC → AC → user input (from confirm modal)
-        const n = (v) => {
-          if (v == null) return null;
-          const num = Number(String(v).replace(/[^\d.\-]/g, ""));
-          return Number.isFinite(num) ? num : null;
-        };
-        const capDC = n(projectData?.capacity_dc_kwp ?? confirmForm?.capacityDCkWp);
-        const capAC = n(projectData?.capacity_ac_kw ?? confirmForm?.capacityACkWac);
-        const userInputCapacity = n(confirmForm?.installed);
-        const capacity = (capDC && capDC > 0) ? capDC : (capAC && capAC > 0) ? capAC : (userInputCapacity || 0);
-        const rprRes = await fetch(`${backend}/analysis/realpr`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ records: parsed.records, capacity })
-        });
-        try { rprJson = await rprRes.json(); } catch {}
-        console.log("[DEBUG] RPR result:", rprJson);
-      }
-
-      console.log("[DEBUG] Navigating to report with data:", {
-        hasParsedRecords: !!parsed?.records?.length,
-        parsedRecordsCount: parsed?.records?.length,
-        compute: computeJson,
-        rpr: rprJson?.data
-      });
-      navigate("/report", { state: { ...computeJson, rpr: rprJson?.data, parsedRecordsCount: parsed?.rows || 0 } });
+      navigate("/report", { state: { ...computeJson, rpr: null, parsedRecordsCount: 0 } });
     } catch (err) {
       console.error("Confirm failed:", err);
       alert(err.message || "Failed to analyze file.");
@@ -242,7 +142,7 @@ export default function HomePage() {
           {/* === Upload Inputs === */}
           <h3 className="text-[18px] font-semibold text-gray-700 mb-5">Upload Your Data</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-left">
-            <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm hover:shadow transition">
+            <div className="md:col-span-2 p-4">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-blue-500 text-xl">🗂️</span>
                 <p className="font-semibold text-blue-700 text-[15px]">
@@ -256,7 +156,7 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+            <div className="p-4">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-amber-500 text-xl">📄</span>
                 <p className="font-semibold text-amber-700 text-[15px]">PVSyst Simulation (optional)</p>
@@ -268,7 +168,7 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-yellow-100 bg-white p-4 shadow-sm">
+            <div className="p-4">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-yellow-500 text-xl">☀️</span>
                 <p className="font-semibold text-yellow-700 text-[15px]">Irradiation Data (optional)</p>
@@ -281,8 +181,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* === Buttons === */}
-          <div className="flex flex-col md:flex-row justify-center items-center gap-3 mt-4">
+          {/* === Start Analysis Button (centered) === */}
+          <div className="flex justify-center mt-6">
             <button
               onClick={handleStart}
               className="bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium px-8 py-3 rounded-xl shadow-md hover:shadow-lg transition"
@@ -290,62 +190,7 @@ export default function HomePage() {
             >
               {checking ? "Checking..." : "Start Analysis"}
             </button>
-
-            <button
-              onClick={async () => {
-                try {
-                  // Call dev endpoints to read local test files and open modal
-                  const [c1, c2] = await Promise.all([
-                    fetch(`${backend}/analysis/compute-test`).then((r) => r.json()).catch(() => null),
-                    fetch(`${backend}/analysis/parse-pvsyst-test`).then((r) => r.json()).catch(() => null),
-                  ]);
-                  if (!c1?.success) return alert("Không đọc được test FusionSolar (compute-test)");
-                  const autoInfo = c2?.success ? (c2.data || {}) : {};
-                  const merged = { ...autoInfo, ...(c1.data || {}) };
-                  setProjectData(merged);
-                  setModalOpen(true);
-                } catch (err) {
-                  alert("Dev test failed: " + (err.message || err));
-                }
-              }}
-              className="border border-violet-300 text-violet-700 font-medium px-8 py-3 rounded-xl hover:bg-violet-50 transition"
-            >
-              Run Local Test (test-data)
-            </button>
-
-            <button
-              onClick={async () => {
-                if (!logFile) return alert("Please upload an Actual Log file first!");
-                try {
-                  const fd = new FormData();
-                  fd.append("logfile", logFile);
-                  const r = await fetch(`${backend}/analysis/compute`, {
-                    method: "POST",
-                    body: fd,
-                  });
-                  const text = await r.text();
-                  let data;
-                  try {
-                    data = JSON.parse(text);
-                  } catch (e) {
-                    alert("Backend trả về dữ liệu không hợp lệ (không phải JSON). Kiểm tra log backend.");
-                    console.error("Invalid JSON from backend:", text);
-                    return;
-                  }
-                  console.log("Cloud parse result:", data);
-                  alert("Cloud parse finished — check console for details.");
-                } catch (err) {
-                  console.warn("Cloud parse failed:", err);
-                  alert("Cloud parse failed: " + (err.message || err));
-                }
-              }}
-              className="border border-gray-300 text-gray-700 font-medium px-8 py-3 rounded-xl hover:bg-gray-50 transition"
-            >
-              Run Cloud Parse (backend)
-            </button>
           </div>
-
-          <TestBackendButton />
 
           <p className="mt-3 text-sm text-blue-700 hover:underline cursor-pointer">
             How to export log files
