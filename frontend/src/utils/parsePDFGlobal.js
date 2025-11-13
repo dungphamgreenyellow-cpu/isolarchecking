@@ -29,6 +29,8 @@ export async function parsePDFGlobal(file) {
       gps: lat != null && lon != null ? { lat, lon } : null,
       capacity_dc_kwp: capacityDC,
       capacity_ac_kw: capacityAC,
+      cod_date: d.cod_date || null,
+      codDate: d.cod_date || null,
       // Backward-compatible keys expected by ProjectConfirmModal
       capacityDCkWp: capacityDC,
       capacityACkWac: capacityAC,
@@ -45,7 +47,6 @@ export async function parsePDFGlobal(file) {
     };
     return normalized;
   } catch (e) {
-    console.warn("[parsePDFGlobal] parse failed:", e?.message || e);
     return null;
   }
 }

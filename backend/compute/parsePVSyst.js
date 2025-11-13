@@ -54,8 +54,7 @@ export async function parsePVSystPDF(filePath) {
   }
 
   // Logging for diagnostics
-  console.log(`[parsePVSyst] Used: ${used} | length=${pdfText.length}`);
-  console.log("[parsePVSyst] First 500 chars:", pdfText.slice(0, 500));
+  // parser selected and text length available (log removed in release)
 
   // === Helpers ===
   const parseNumberFlexible = (raw) => {
@@ -255,23 +254,93 @@ export async function parsePVSystPDF(filePath) {
 
   const dc_kWp = toKWp(dcRaw);
   const ac_kW = toKWac(acRaw);
+
+  // === Extra DC capacity extraction (robust Pnom total pattern) ===
+  // Pattern examples inside PDF text:
+  //   "PV Array Nb. of modules Pnom total 1799 980 units kWp"
+  //   "Inverters Nb. of units Pnom total Pnom ratio 8 800 1.226 units kWac"
+  // We want the number immediately before "units kWp" for DC.
+  let pnomDc = null;
+  const pnomDcMatch = pdfText.match(/Pnom total[^\n]*?(\d+[\d.,]+)\s+units\s+kWp/i);
+  if (pnomDcMatch) {
+    const tokens = pnomDcMatch[0].match(/(\d+[\d.,]+)/g) || [];
+    // Heuristic: last numeric token before 'units kWp'
+    if (tokens.length) {
+      const candidate = parseNumberFlexible(tokens[tokens.length - 1]);
+      if (candidate != null) pnomDc = candidate;
+    }
+  }
+  // Fallback: look for standalone "Pnom total" with kWp unit.
+  if (pnomDc == null) {
+    const alt = pdfText.match(/Pnom total\s*([\d.,]+)\s*(kWp|MWp)/i);
+    if (alt) pnomDc = toKWp(`${alt[1]} ${alt[2]}`);
+  }
+  // Select best DC capacity
+  const capacity_dc_kwp = pnomDc != null ? pnomDc : dc_kWp || null;
+
+  // === Extract simulation/report date → cod_date ===
+  // Accept patterns:
+  //   Simulation date: 21/12/22 09:51
+  //   Report date: 2022/12/21
+  //   Generated on 21.12.2022
+  // Normalize to MM/DD/YYYY for frontend date picker compatibility.
+  let cod_date = null;
+  const dateBlock = pdfText.match(/(Simulation date|Report date|Generated on)[:\s]+([^\n]{5,30})/i);
+  if (dateBlock) {
+    // Extract first date-like token
+    const rawSegment = dateBlock[2];
+    const dateTokenMatch = rawSegment.match(/(\d{1,4}[./-]\d{1,2}[./-]\d{2,4})/);
+    if (dateTokenMatch) {
+      const rawDate = dateTokenMatch[1];
+      // Replace separators with '-'
+      const parts = rawDate.replace(/[.\/]/g, '-').split('-');
+      // Determine format heuristically
+      // Cases: dd-mm-yy, dd-mm-yyyy, yyyy-mm-dd
+      let day, month, year;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          // yyyy-mm-dd
+          year = parseInt(parts[0]);
+          month = parseInt(parts[1]);
+          day = parseInt(parts[2]);
+        } else if (parts[2].length === 4) {
+          // dd-mm-yyyy
+          day = parseInt(parts[0]);
+          month = parseInt(parts[1]);
+          year = parseInt(parts[2]);
+        } else {
+          // dd-mm-yy or yy-mm-dd -> assume dd-mm-yy common PVSyst style
+          day = parseInt(parts[0]);
+          month = parseInt(parts[1]);
+          let y = parseInt(parts[2]);
+          year = y < 30 ? 2000 + y : 1900 + y; // pivot year 30
+        }
+        if (
+          Number.isFinite(day) && Number.isFinite(month) && Number.isFinite(year) &&
+          day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900
+        ) {
+          const mm = String(month).padStart(2, '0');
+          const dd = String(day).padStart(2, '0');
+          cod_date = `${mm}/${dd}/${year}`;
+        }
+      }
+    }
+  }
   const tilt_deg = parseNumberFlexible(tiltRaw);
   const azimuth_deg = parseNumberFlexible(azimuthRaw);
   const soiling_loss_percent = parseNumberFlexible(soilingRaw);
   const dc_ac_ratio = dc_kWp && ac_kW ? Number((dc_kWp / ac_kW).toFixed(3)) : null;
 
   // Field logs for quick validation
-  console.log("[parsePVSyst] siteName:", siteName);
-  console.log("[parsePVSyst] GPS:", gps);
-  console.log("[parsePVSyst] PV Module:", moduleModel);
-  console.log("[parsePVSyst] Inverter:", inverterModel);
-  console.log("[parsePVSyst] DC kWp:", dc_kWp, "| AC kW:", ac_kW, "| ratio:", dc_ac_ratio);
+  
 
   return {
     success: true,
     siteName,
     gps,
     capacities: { dc_kWp, ac_kW },
+    capacity_dc_kwp,
+    cod_date,
     moduleModel,
     inverterModel,
     tilt_deg,

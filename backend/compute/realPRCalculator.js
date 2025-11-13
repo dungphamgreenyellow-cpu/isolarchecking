@@ -59,14 +59,7 @@ export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, deb
     // --- 5. Compute PR ---
     const pr = (Eac_kWh / (Eirr_kWhm2 * capacity)) * 100;
 
-    if (debug) {
-      console.log("🔍 [Debug RPR Calculation]");
-      console.log("Total records:", totalSlots);
-      console.log("Capacity (kWp):", capacity);
-      console.log("Eac_kWh:", Eac_kWh.toFixed(2));
-      console.log("Eirr_kWh/m2:", Eirr_kWhm2.toFixed(3));
-      console.log("RPR (%):", pr.toFixed(2));
-    }
+    // debug logs removed for release cleanliness
 
     // --- 6. Build Daily RPR series ---
     const dailySeries = [];

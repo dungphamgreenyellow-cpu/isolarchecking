@@ -78,10 +78,8 @@ export default function HomePage() {
 
     try {
       const merged = {
-        ...projectData,   // include any info set via setProjectInfo (e.g., siteName, PVSyst fields)
-        ...parsedData,    // data + pvsyst info merged in FileCheckModal
-        actualProduction: parsedData?.totalProduction ?? 0,
-        dailyProduction: parsedData?.dailyProduction ?? [],
+        ...projectData,      // ALWAYS include latest projectInfo first (PVSyst + Site Name)
+        ...parsedData        // log info can override duplicates, not PVSyst
       };
 
       setProjectData(merged);

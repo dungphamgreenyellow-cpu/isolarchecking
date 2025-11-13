@@ -75,8 +75,7 @@ export default function Report() {
     gpsCountry,
   } = projectData;
 
-  console.log("[DEBUG] Report received parsedRecordsCount:", parsedRecordsCount);
-  console.log("[DEBUG] Report received rprData:", rprData);
+  
 
   // === Auto baseline GHI based on log month ===
   React.useEffect(() => {
@@ -124,6 +123,12 @@ export default function Report() {
 
   // === Compute Real PR + Daily Trend ===
   React.useEffect(() => {
+    // If rpr was provided via navigation state, use it and skip recalculation
+    if (rprData && typeof rprData === "object") {
+      setRealPR(rprData.RPR ?? rprRef);
+      setDailyRPR(rprData.dailySeries || []);
+      return;
+    }
     (async () => {
       const parse = state?.parse || state?.projectData?.parse || null;
       if (!parse || !capKWp) {
@@ -151,9 +156,7 @@ export default function Report() {
           setRealPR("0.00");
         } else {
           const res = json.data || json.rpr || json.details || json;
-          // res should be an object with RPR field from /analysis/realpr
           setRealPR(res?.RPR ?? "0.00");
-          // pick dailySeries from backend if available
           const dailySeries = res?.dailySeries || [];
           setDailyRPR(dailySeries);
         }
@@ -165,7 +168,7 @@ export default function Report() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, capKWp]);
+  }, [state, capKWp, rprData]);
 
   const getFontSizeForInverter = (text = "") => {
     const len = text.length;

@@ -15,8 +15,7 @@ router.post("/compute", async (req, res) => {
     const file = req.files?.logfile;
     if (!file?.data) return res.status(400).json({ success: false, error: "No logfile uploaded" });
     const result = await streamParseAndCompute(file.data);
-    console.log("[/analysis/compute] Payload nhận:", req.files?.logfile?.name);
-    console.log("[/analysis/compute] Result trả:", result);
+    
     const t1 = process.hrtime.bigint();
     return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
   } catch (e) {
@@ -88,7 +87,7 @@ router.post("/parse-pvsyst", async (req, res) => {
     const t0 = performance.now();
     const info = await parsePVSystPDF(tmpPath);
     const dt = performance.now() - t0;
-    console.log("[/analysis/parse-pvsyst] file=", file.name, "ms=", dt.toFixed(1));
+    
     try { await fs.promises.unlink(tmpPath); } catch {}
     return res.json({ success: true, ms: dt, data: info });
   } catch (err) {
