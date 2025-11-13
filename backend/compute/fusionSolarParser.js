@@ -62,11 +62,13 @@ export async function streamParseAndCompute(buffer) {
       let startTimeCol = -1;
       let totalYieldColIndex = -1;
       let inverterColIndex = -1;
+      let siteNameColIndex = -1;
       headers.forEach((cell, i) => {
         const txt = (cell || "").toString().trim().toLowerCase();
         if (/start\s*time/.test(txt)) startTimeCol = i;
         if (/total\s*yield.*kwh/.test(txt)) totalYieldColIndex = i;
         if (txt === "manageobject" || txt === "device name" || txt === "inverter" || txt === "inverter name") inverterColIndex = i;
+        if (txt.includes("site name")) siteNameColIndex = i;
       });
       if (inverterColIndex === -1) {
         headers.forEach((cell, i) => {
@@ -81,6 +83,7 @@ export async function streamParseAndCompute(buffer) {
       // Parse data rows
       const startIdx = headerRowIndex + 1;
       const invDayMap = {};
+      let siteName = null;
       let parsedRecordsCount = 0;
 
       for (let r = startIdx; r < records.length; r++) {
@@ -90,6 +93,10 @@ export async function streamParseAndCompute(buffer) {
         const rawT = row[startTimeCol];
         const rawMo = row[inverterColIndex];
         const rawEac = row[totalYieldColIndex];
+        if (siteName == null && siteNameColIndex !== -1) {
+          const sn = row[siteNameColIndex];
+          if (sn != null && String(sn).trim() !== "") siteName = String(sn).trim();
+        }
         if (rawT == null || rawMo == null || rawEac == null) continue;
 
         const day = toYMD(rawT);
@@ -127,6 +134,7 @@ export async function streamParseAndCompute(buffer) {
 
       return {
         success: true,
+        siteName,
         dailyProduction: daily,
         dailyProductionTotal: dayKeys.reduce((acc, d) => acc + (daily[d] || 0), 0),
         firstDay,

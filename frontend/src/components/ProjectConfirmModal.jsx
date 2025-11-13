@@ -23,23 +23,14 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
     };
     setForm((f) => {
       const dc = initialData?.capacityDCkWp ?? initialData?.capacity_dc_kwp ?? f.capacityDCkWp;
-      const ac = initialData?.capacityACkWac ?? initialData?.capacity_ac_kw ?? f.capacityACkWac;
+      const codRaw = initialData?.codDate || initialData?.cod || initialData?.cod_date || f.codDate || "";
       return {
-        ...f,
-        siteName: initialData?.siteName || f.siteName || "",
         installed: initialData?.installed || (dc != null ? `${dc} kWp` : f.installed || ""),
-        location: initialData?.gps ? `${initialData.gps.lat},${initialData.gps.lon}` : (initialData?.location || f.location || ""),
-        codDate: normalizeDate(initialData?.codDate || initialData?.cod || f.codDate || ""),
-        capacityDCkWp: dc != null ? String(dc) : f.capacityDCkWp || "",
-        capacityACkWac: ac != null ? String(ac) : f.capacityACkWac || "",
-        pvModuleModel: initialData?.pvModuleModel || initialData?.module_model || initialData?.moduleModel || f.pvModuleModel || "",
-        inverterModel: initialData?.inverterModel || initialData?.inverter_model || initialData?.inverterModel || f.inverterModel || "",
-        soilingPercent: initialData?.soilingPercent != null ? String(initialData.soilingPercent) : (initialData?.soiling_loss_percent != null ? String(initialData.soiling_loss_percent) : f.soilingPercent || ""),
+        codDate: normalizeDate(codRaw),
         tempCoeff: f.tempCoeff || "0.34",
         degr: f.degr || "0.5",
       };
     });
-    console.log("[ProjectConfirmModal] initialData synced:", initialData);
   }, [open, initialData]);
 
   if (!open) return null;
@@ -51,11 +42,6 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
         <h3 className="text-lg font-semibold mb-4">Confirm Project Information</h3>
 
         <div className="grid grid-cols-2 gap-4">
-          <label className="col-span-1 text-sm">
-            <span className="text-gray-600">Site Name</span>
-            <input className="mt-1 w-full border rounded-lg px-3 py-2"
-              value={form.siteName} onChange={change("siteName")} />
-          </label>
           <label className="col-span-1 text-sm">
             <span className="text-gray-600">Installed Capacity (kWp)</span>
             <input className="mt-1 w-full border rounded-lg px-3 py-2"

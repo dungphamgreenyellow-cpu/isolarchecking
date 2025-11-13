@@ -24,9 +24,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       try {
         if (logFile) {
           const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
-          if (!backendURL) {
-            console.warn("⚠️ [FileCheckModal] Missing backend URL (VITE_BACKEND_URL). Using relative URL may fail due to CORS.");
-          }
+          // backendURL must be defined in production; warn removed for release build
           const formData = new FormData();
           formData.append("logfile", logFile);
           const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
@@ -49,20 +47,22 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           try {
             data = await res.json();
           } catch (jsonErr) {
-            console.error("[FileCheckModal] JSON parse error", jsonErr);
             setLogStatus({ ok: false, msg: "Invalid JSON response" });
           }
           if (data?.success) {
             // success: backend returns { success: true, data: {...}, parse_ms }
             setLogStatus({ ok: true, msg: "FusionSolar log parsed successfully" });
             logRes = { ...data.data, success: true, parse_ms: data.parse_ms };
+            // populate Site Name from log if present
+            if (data?.data?.siteName && setProjectInfo) {
+              setProjectInfo((prev) => ({ ...prev, siteName: data.data.siteName }));
+            }
           } else {
             setLogStatus({ ok: false, msg: data?.message || "Error reading log file" });
             logRes = { success: false, message: data?.message || "Error reading log file" };
           }
         }
       } catch (err) {
-        console.error("[FileCheckModal] Upload error:", err);
         setLogStatus({ ok: false, msg: "Server not reachable. Please check backend URL or CORS." });
         logRes = { success: false, message: "Server not reachable. Please check backend URL or CORS." };
       }
@@ -72,7 +72,6 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
         if (ok) {
           const pdfInfo = await parsePDFGlobal(pvsystFile);
           if (pdfInfo) {
-            console.log("[FileCheckModal] Parsed PDF info:", pdfInfo);
             // Auto-fill Installed Capacity and COD Date if available from PDF
             const overrides = {};
             // Installed = DC kWp
@@ -104,7 +103,6 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
               overrides.codDate = toISO(raw);
             }
             const merged = { ...pdfInfo, ...overrides };
-            console.log("[FileCheckModal] merged projectInfo:", merged);
             setProjectInfo && setProjectInfo(merged);
             pvRes = { valid: true, message: "PVSyst PDF parsed" };
           } else {
