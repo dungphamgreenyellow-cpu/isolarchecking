@@ -142,25 +142,7 @@ export default function Report() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, capKWp, rprData]);
-        const json = await r.json();
-        if (!json?.success) {
-          console.error("RPR backend error:", json?.error || json);
-          setRealPR("0.00");
-        } else {
-          const res = json.data || json.rpr || json.details || json;
-          setRealPR(res?.RPR ?? "0.00");
-          const dailySeries = res?.dailySeries || [];
-          setDailyRPR(dailySeries);
-        }
-      } catch (err) {
-        console.error("RPR calc error:", err);
-        setRealPR("0.00");
-      } finally {
-        setLoadingPR(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, capKWp, rprData]);
+  
 
   const getFontSizeForInverter = (text = "") => {
     const len = text.length;
