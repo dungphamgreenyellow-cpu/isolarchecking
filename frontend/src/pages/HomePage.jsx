@@ -10,8 +10,8 @@ import { useNavigate } from "react-router-dom";
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 
-// Backend base URL (fallback to local for dev)
-const backend = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+// Backend base URL
+const backend = import.meta.env.VITE_BACKEND_URL;
 
 // === Quick helper ===
 function inferCountryFromLocation(str = "") {
