@@ -10,26 +10,18 @@ import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// POST /analysis/compute
+// POST /analysis/compute (multer memoryStorage ONLY)
 router.post("/compute", upload.single("logfile"), async (req, res) => {
-  const t0 = process.hrtime.bigint();
   try {
-    let buffer = null;
-    if (req.file?.buffer) {
-      buffer = req.file.buffer;
-    } else if (req.files?.logfile?.data) {
-      buffer = req.files.logfile.data;
-    } else if (req.files?.logfile?.tempFilePath) {
-      try {
-        buffer = await fs.promises.readFile(req.files.logfile.tempFilePath);
-      } catch {}
+    if (!req.file || !req.file.buffer) {
+      return res.json({ success: false, error: "No logfile uploaded" });
     }
-    if (!buffer) return res.json({ success: false, error: "No logfile uploaded" });
-    const result = await streamParseAndCompute(buffer);
-    const t1 = process.hrtime.bigint();
-    return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
+
+    const result = await streamParseAndCompute(req.file.buffer);
+    return res.json(result);
+
   } catch (err) {
-    console.error(err);
+    console.error("Compute Error:", err);
     return res.json({ success: false, error: err.message });
   }
 });
