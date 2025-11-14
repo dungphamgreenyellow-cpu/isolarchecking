@@ -1,5 +1,6 @@
 // backend/routes/analysis.js
 import express from "express";
+import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
@@ -7,18 +8,28 @@ import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
 import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // POST /analysis/compute
-router.post("/compute", async (req, res) => {
+router.post("/compute", upload.single("logfile"), async (req, res) => {
   const t0 = process.hrtime.bigint();
   try {
-    const file = req.files?.logfile;
-    console.log("Received file:", file?.name);
-    if (!file?.data) return res.json({ success: false, error: "No logfile uploaded" });
-    const result = await streamParseAndCompute(file.data);
+    let buffer = null;
+    if (req.file?.buffer) {
+      buffer = req.file.buffer;
+    } else if (req.files?.logfile?.data) {
+      buffer = req.files.logfile.data;
+    } else if (req.files?.logfile?.tempFilePath) {
+      try {
+        buffer = await fs.promises.readFile(req.files.logfile.tempFilePath);
+      } catch {}
+    }
+    if (!buffer) return res.json({ success: false, error: "No logfile uploaded" });
+    const result = await streamParseAndCompute(buffer);
     const t1 = process.hrtime.bigint();
     return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
   } catch (err) {
+    console.error(err);
     return res.json({ success: false, error: err.message });
   }
 });
