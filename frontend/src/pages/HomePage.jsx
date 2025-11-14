@@ -10,8 +10,8 @@ import { useNavigate } from "react-router-dom";
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 
-// Backend base URL
-const backend = import.meta.env.VITE_BACKEND_URL;
+// Backend base URL (ensure correct Render domain fallback)
+const backend = import.meta.env.VITE_BACKEND_URL || "https://isolarchecking-backend.onrender.com";
 
 // === Quick helper ===
 function inferCountryFromLocation(str = "") {
@@ -79,7 +79,11 @@ export default function HomePage() {
     setChecking(true);
 
     try {
-      const merged = { ...parsedData, ...projectData };
+      const merged = {
+        ...parsedData,
+        ...projectData,
+        siteName: parsedData?.siteName || projectData?.siteName || ""
+      };
 
       setComputeData(parsedData);
       setProjectData(merged);

@@ -25,25 +25,15 @@ app.use(
   })
 );
 
-// CORS: allow localhost FE and Render FE
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://isolarchecking.onrender.com",
-];
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow non-browser clients (no Origin header) like Postman/cURL
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// Updated CORS whitelist (remove previous dynamic logic)
+app.use(cors({
+  origin: [
+    "https://isolarchecking.onrender.com",
+    "http://localhost:5173"
+  ],
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"],
+}));
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -72,5 +62,6 @@ app.use((err, req, res, next) => {
 
 // === Start
 app.listen(PORT, "0.0.0.0", () => {
+  console.log("Backend starting on PORT:", PORT);
   console.log(`☀️ Backend running → http://localhost:${PORT}`);
 });

@@ -13,14 +13,13 @@ router.post("/compute", async (req, res) => {
   const t0 = process.hrtime.bigint();
   try {
     const file = req.files?.logfile;
-    if (!file?.data) return res.status(400).json({ success: false, error: "No logfile uploaded" });
+    console.log("Received file:", file?.name);
+    if (!file?.data) return res.json({ success: false, error: "No logfile uploaded" });
     const result = await streamParseAndCompute(file.data);
-
     const t1 = process.hrtime.bigint();
     return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
-  } catch (e) {
-    
-    return res.status(500).json({ success: false, message: "Backend crash", error: e.message });
+  } catch (err) {
+    return res.json({ success: false, error: err.message });
   }
 });
 
@@ -30,16 +29,15 @@ router.post("/realpr", async (req, res) => {
   try {
     const { records, capacity, irradiance } = req.body || {};
     if (!records || !Array.isArray(records)) {
-      return res.status(400).json({ success: false, error: "Missing records array in body" });
+      return res.json({ success: false, error: "Missing records array in body" });
     }
-    if (!capacity) return res.status(400).json({ success: false, error: "Missing capacity" });
-
-  const parsed = { records };
-  const dailyGHI = irradiance || [];
-  const result = computeRealPerformanceRatio(parsed, dailyGHI, capacity);
-  return res.json({ success: true, data: result });
-  } catch (e) {
-    return res.status(500).json({ success: false, error: e?.message });
+    if (!capacity) return res.json({ success: false, error: "Missing capacity" });
+    const parsed = { records };
+    const dailyGHI = irradiance || [];
+    const result = computeRealPerformanceRatio(parsed, dailyGHI, capacity);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    return res.json({ success: false, error: err.message });
   }
 });
 
