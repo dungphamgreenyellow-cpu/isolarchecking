@@ -157,8 +157,8 @@ export default function Report() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#f6f9ff]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
+      <div className="w-full max-w-[794px] mx-auto">
         <ReportHeader
           siteName={projectData?.siteName}
           installedCapacity={projectData?.capacity_dc_kwp}

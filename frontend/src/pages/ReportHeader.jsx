@@ -1,16 +1,18 @@
 import React, { useState } from "react";
 
 // Accept parsed values directly (gps, pvModel, inverterModel, firstDay, lastDay)
-export default function ReportHeader({
-  siteName = "—",
-  gps = "—",
-  pvModel = "—",
-  inverterModel = "—",
-  installedCapacity = "—",
-  codDate = "—",
-  firstDay = null,
-  lastDay = null,
-}) {
+export default function ReportHeader(props) {
+  const {
+    siteName,
+    gps,
+    pvModel,
+    inverterModel,
+    installedCapacity,
+    codDate,
+    firstDay,
+    lastDay,
+  } = props;
+
   const [generatedAt] = useState(formatDate(new Date()));
 
   const periodBox = firstDay && lastDay ? `${firstDay} → ${lastDay}` : "—";
@@ -73,7 +75,7 @@ export default function ReportHeader({
           </div>
           <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">PV / INV</p>
-            <p className="font-medium mt-1 leading-snug truncate" title={pvInvBox}>{pvInvBox}</p>
+            <p className="font-medium mt-1 leading-snug whitespace-normal break-words" title={pvInvBox}>{pvInvBox}</p>
           </div>
           <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">COD</p>
