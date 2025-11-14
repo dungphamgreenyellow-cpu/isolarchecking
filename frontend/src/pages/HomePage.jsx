@@ -33,6 +33,8 @@ export default function HomePage() {
   const [irrFile, setIrrFile] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [projectData, setProjectData] = useState({});
+  const [computeData, setComputeData] = useState(null);
+  const [confirmData, setConfirmData] = useState(null);
   const [fileCheckOpen, setFileCheckOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState(null);
@@ -77,15 +79,14 @@ export default function HomePage() {
     setChecking(true);
 
     try {
-      const merged = {
-        ...projectData,      // ALWAYS include latest projectInfo first (PVSyst + Site Name)
-        ...parsedData        // log info can override duplicates, not PVSyst
-      };
+      const merged = { ...parsedData, ...projectData };
 
+      setComputeData(parsedData);
       setProjectData(merged);
       setModalOpen(true);
     } catch (err) {
       setProjectData(parsedData || {});
+      setComputeData(parsedData || null);
       setModalOpen(true);
     } finally {
       setChecking(false);
@@ -93,22 +94,16 @@ export default function HomePage() {
   };
 
   async function handleConfirm(confirmForm) {
-    try {
-      if (!logFile) throw new Error("Please upload a FusionSolar log file.");
-
-      // Existing compute call (kept)
-      const fd = new FormData();
-      fd.append("logfile", logFile);
-      if (pvsystFile) fd.append("pvsyst", pvsystFile);
-      const computeRes = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
-      const computeJson = await computeRes.json();
-      navigate("/report", { state: { ...computeJson, rpr: null, parsedRecordsCount: 0 } });
-    } catch (err) {
-      console.error("Confirm failed:", err);
-      alert(err.message || "Failed to analyze file.");
-    } finally {
-      setChecking(false);
-    }
+    setModalOpen(false);
+    setConfirmData(confirmForm);
+    const mergedProjectData = projectData; // already merged from parsedData step
+    navigate("/report", {
+      state: {
+        projectData: mergedProjectData,
+        confirmData: confirmForm,
+        computeData: computeData,
+      },
+    });
   }
 
   return (
