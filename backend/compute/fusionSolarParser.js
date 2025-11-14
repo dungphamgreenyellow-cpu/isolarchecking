@@ -1,138 +1,166 @@
-// backend/compute/fusionSolarParser.js — ExcelJS Streaming XLSX parser
 import ExcelJS from "exceljs";
 import { Readable } from "stream";
 
-const toYMD = (d) => {
-  const dt = new Date(d);
+// Convert Excel date or string date → YYYY-MM-DD
+function normalizeDate(raw) {
+  if (!raw) return null;
+
+  // Excel numeric date
+  const num = Number(raw);
+  if (Number.isFinite(num) && num > 20000 && num < 90000) {
+    const origin = new Date(1899, 11, 30);
+    const dt = new Date(origin.getTime() + num * 86400000);
+    if (!isNaN(dt)) {
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, "0");
+      const d = String(dt.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  const dt = new Date(raw);
   if (isNaN(dt)) return null;
   const y = dt.getFullYear();
   const m = String(dt.getMonth() + 1).padStart(2, "0");
-  const day = String(dt.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
+  const d = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
-const normalizeInverter = (raw) => {
-  const base = String(raw || "").split("/")[0].trim();
+// Normalize ManageObject → "INV-XXXX"
+function normalizeInverter(v) {
+  if (!v) return null;
+  const base = String(v).split("/")[0].trim();
   if (!base) return null;
-  const serial = base.replace(/^INV-?/i, "").replace(/\s+/g, "").toUpperCase();
-  return `INV-${serial}`;
-};
+  const cleaned = base.replace(/inv-?/i, "").trim().toUpperCase();
+  return cleaned ? `INV-${cleaned}` : null;
+}
 
 export async function streamParseAndCompute(buffer) {
-  // ExcelJS WorkbookReader expects a stream; wrap buffer
-  const bufStream = Readable.from(buffer);
-  const workbook = new ExcelJS.stream.xlsx.WorkbookReader(bufStream, { entries: "emit", worksheets: "emit" });
+  const stream = Readable.from(buffer);
+
+  const workbook = new ExcelJS.stream.xlsx.WorkbookReader(stream, {
+    entries: "emit",
+    worksheets: "emit",
+    sharedStrings: "cache",
+    styles: "cache"
+  });
 
   let headers = null;
   let headerRowIndex = -1;
   let rowIndex = 0;
-  let startTimeCol = -1;
-  let totalYieldColIndex = -1;
-  let inverterColIndex = -1;
-  let siteNameColIndex = -1;
+
+  let startCol = -1;
+  let yieldCol = -1;
+  let invCol = -1;
+  let siteCol = -1;
+
   let siteName = null;
   let parsedRecordsCount = 0;
   const invDayMap = {};
 
-  try {
-    for await (const entry of workbook) {
-      if (entry.type !== "worksheet") continue;
+  for await (const entry of workbook) {
+    if (entry.type !== "worksheet") continue;
 
-      for await (const row of entry) {
-        const values = Array.isArray(row.values) ? row.values : [];
-        const cells = values.map((v) => (v == null ? "" : String(v).trim()));
+    for await (const row of entry) {
+      const cells = [];
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        let v = cell.value;
+        if (v && typeof v === "object") {
+          if ("text" in v) v = v.text;
+          else if ("result" in v) v = v.result;
+        }
+        cells[colNum - 1] = v == null ? "" : String(v).trim();
+      });
 
-        // Header detection within first 10 rows using REQUIRED keys
-        if (!headers && rowIndex < 10) {
-          const lower = cells.map((c) => c.toLowerCase());
-          const REQUIRED = ["start time", "total yield", "manageobject"];
-          const score = REQUIRED.reduce((acc, k) => acc + (lower.some((c) => c.includes(k)) ? 1 : 0), 0);
+      // Header detection (prefer row index 3)
+      if (!headers && rowIndex < 10) {
+        const lower = cells.map(c => c.toLowerCase());
+        const REQUIRED = ["start time", "total yield", "manageobject"];
+        const score = REQUIRED.reduce((a,k)=>a+(lower.some(c=>c.includes(k))?1:0),0);
 
-          if (rowIndex === 3 && score >= 3) {
-            headers = cells;
-            headerRowIndex = 3;
-          } else if (score >= 3 && headers == null) {
-            headers = cells;
-            headerRowIndex = rowIndex;
-          }
-
-          if (rowIndex === 9 && !headers) {
-            return { success: false, message: "Không tìm thấy header hợp lệ trong 10 dòng đầu" };
-          }
+        if (rowIndex === 3 && score >= 3) {
+          headers = cells; headerRowIndex = rowIndex;
+        } else if (!headers && score >= 3) {
+          headers = cells; headerRowIndex = rowIndex;
         }
 
-        // Lock header and locate column indexes
-        if (headers && rowIndex === headerRowIndex) {
-          headers.forEach((h, i) => {
-            const txt = String(h || "").toLowerCase();
-            if (/start\s*time/.test(txt)) startTimeCol = i;
-            if (/total\s*yield/.test(txt)) totalYieldColIndex = i;
-            if (/manageobject|device name|inverter|inverter name/.test(txt)) inverterColIndex = i;
-            if (txt.includes("site name")) siteNameColIndex = i;
-          });
+        if (rowIndex === 9 && !headers) {
+          return { success:false, message:"Không tìm thấy header hợp lệ trong 10 dòng đầu" };
         }
-
-        // Data rows
-        if (headers && rowIndex > headerRowIndex) {
-          const rawT = cells[startTimeCol];
-          const rawE = cells[totalYieldColIndex];
-          const rawInv = cells[inverterColIndex];
-
-          if (siteName == null && siteNameColIndex !== -1) {
-            const sn = cells[siteNameColIndex];
-            if (sn) siteName = String(sn).trim();
-          }
-
-          const day = toYMD(rawT);
-          if (day && rawInv && rawE) {
-            const inv = normalizeInverter(rawInv);
-            const numStr = String(rawE).replace(/[\,\s]/g, "");
-            if (numStr !== "" && !/^(na|null|undefined)$/i.test(numStr)) {
-              const eac = Number(numStr);
-              if (Number.isFinite(eac)) {
-                if (!invDayMap[day]) invDayMap[day] = {};
-                if (!invDayMap[day][inv]) invDayMap[day][inv] = { min: eac, max: eac };
-                else {
-                  if (eac < invDayMap[day][inv].min) invDayMap[day][inv].min = eac;
-                  if (eac > invDayMap[day][inv].max) invDayMap[day][inv].max = eac;
-                }
-                parsedRecordsCount++;
-              }
-            }
-          }
-        }
-
-        rowIndex++;
       }
-    }
 
-    // Aggregate daily totals
-    const daily = {};
-    for (const day of Object.keys(invDayMap)) {
-      let sum = 0;
-      for (const inv of Object.keys(invDayMap[day])) {
-        const { min, max } = invDayMap[day][inv];
-        const gain = Math.max(0, max - min);
-        if (gain > 0) sum += gain;
+      // Map header columns
+      if (headers && rowIndex === headerRowIndex) {
+        headers.forEach((h, i) => {
+          const t = (h || "").toLowerCase();
+          if (/start\s*time/.test(t)) startCol = i;
+          if (/total\s*yield/.test(t)) yieldCol = i;
+          if (/manageobject|device name|inverter/.test(t)) invCol = i;
+          if (t.includes("site name")) siteCol = i;
+        });
       }
-      daily[day] = sum;
+
+      // Data rows
+      if (headers && rowIndex > headerRowIndex) {
+        const rawT = cells[startCol];
+        const rawE = cells[yieldCol];
+        const rawInv = cells[invCol];
+
+        if (siteName == null && siteCol !== -1) {
+          const sn = cells[siteCol];
+          if (sn) siteName = sn;
+        }
+
+        const day = normalizeDate(rawT);
+        if (!day || !rawInv || !rawE) { rowIndex++; continue; }
+
+        const inv = normalizeInverter(rawInv);
+        if (!inv) { rowIndex++; continue; }
+
+        const numStr = String(rawE).replace(/[\,\s]/g,"");
+        if (/^(na|null|undefined)$/i.test(numStr) || numStr==="") {
+          rowIndex++; continue;
+        }
+
+        const eac = Number(numStr);
+        if (!Number.isFinite(eac)) { rowIndex++; continue; }
+
+        if (!invDayMap[day]) invDayMap[day] = {};
+        if (!invDayMap[day][inv]) invDayMap[day][inv] = {min:eac,max:eac};
+        else {
+          invDayMap[day][inv].min = Math.min(invDayMap[day][inv].min,eac);
+          invDayMap[day][inv].max = Math.max(invDayMap[day][inv].max,eac);
+        }
+
+        parsedRecordsCount++;
+      }
+
+      rowIndex++;
     }
-
-    const dayKeys = Object.keys(daily).sort();
-    const firstDay = dayKeys[0] || null;
-    const lastDay = dayKeys.length ? dayKeys[dayKeys.length - 1] : null;
-
-    return {
-      success: true,
-      siteName,
-      dailyProduction: daily,
-      dailyProductionTotal: dayKeys.reduce((acc, d) => acc + (daily[d] || 0), 0),
-      firstDay,
-      lastDay,
-      parsedRecordsCount,
-      allHeaders: headers,
-    };
-  } catch (err) {
-    return { success: false, note: `Parse failed: ${err?.message || err}` };
   }
+
+  // Aggregate
+  const daily = {};
+  for (const day of Object.keys(invDayMap)) {
+    let sum = 0;
+    for (const inv of Object.keys(invDayMap[day])) {
+      const { min, max } = invDayMap[day][inv];
+      const gain = Math.max(0, max - min);
+      if (gain > 0) sum += gain;
+    }
+    daily[day] = sum;
+  }
+
+  const keys = Object.keys(daily).sort();
+  return {
+    success: true,
+    siteName,
+    dailyProduction: daily,
+    dailyProductionTotal: keys.reduce((a,d)=>a+daily[d],0),
+    firstDay: keys[0] || null,
+    lastDay: keys[keys.length - 1] || null,
+    parsedRecordsCount
+  };
 }
+
+export default { streamParseAndCompute };
