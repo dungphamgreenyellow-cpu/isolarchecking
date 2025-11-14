@@ -1,6 +1,5 @@
-// backend/compute/fusionSolarParser.js — XLSX/CSV → true streaming parse (v9.9-LTS compliant)
+// backend/compute/fusionSolarParser.js — CSV streaming only (v9.9-LTS baseline)
 import { parse } from "csv-parse";
-import * as XLSX from "xlsx";
 import { Readable } from "stream";
 
 const toYMD = (d) => {
@@ -21,18 +20,18 @@ const normalizeInverter = (raw) => {
 
 export async function streamParseAndCompute(buffer) {
   try {
-    const isXlsx = buffer?.slice?.(0, 4)?.toString?.() === "PK\u0003\u0004";
+    const magic = buffer?.slice?.(0, 4)?.toString?.();
+    const isXlsx = magic === "PK\u0003\u0004"; // ZIP header for XLSX
     let csvReadable;
 
     if (isXlsx) {
-      const wb = XLSX.read(buffer, { type: "buffer" });
-      const wsName = wb.SheetNames[0];
-      const ws = wb.Sheets[wsName];
-      if (!ws) return { success: false, note: "Empty XLSX worksheet" };
-      // Stream CSV directly from worksheet to avoid large strings in memory
-      csvReadable = XLSX.stream.to_csv(ws, { FS: ",", RS: "\n" });
+      console.warn("[FusionSolarParser] XLSX file detected. Please export FusionSolar log as CSV and upload the CSV file for best performance.");
+      return {
+        success: false,
+        error: "XLSX file detected. Please export FusionSolar log as CSV from FusionSolar and upload the CSV file instead of XLSX.",
+      };
     } else {
-      // Assume CSV buffer; create a readable stream from it
+      // CSV buffer → UTF-8 text → stream
       const text = Buffer.isBuffer(buffer) ? buffer.toString("utf8") : String(buffer || "");
       if (!text) return { success: false, note: "Empty CSV buffer" };
       csvReadable = Readable.from(text);
