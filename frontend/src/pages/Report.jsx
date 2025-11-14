@@ -169,26 +169,9 @@ export default function Report() {
           firstDay={projectData?.firstDay}
           lastDay={projectData?.lastDay}
         />
-        {/* PROJECT INFO */}
-      <div className="w-full bg-white rounded-lg border border-gray-200 shadow-sm p-5 mt-6">
-        <h2 className="text-base font-semibold mb-3 text-gray-700">Project Info</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="text-gray-500">Site Name</p>
-            <p className="font-medium text-gray-800">{(confirmData?.siteName || siteName) || "—"}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Installed Capacity</p>
-            <p className="font-medium text-gray-800">{confirmData?.installedCapacity ? `${confirmData.installedCapacity} kWp` : (installed || "—")}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">COD</p>
-            <p className="font-medium text-gray-800">{confirmData?.codDate || cod || "—"}</p>
-          </div>
-        </div>
-      </div>
+        {/* PROJECT INFO removed as requested */}
       {/* SUMMARY & CHART */}
-      <div className="w-full bg-[#F9FBFF] rounded-lg shadow p-6 mb-6 mt-6">
+      <div className="w-full bg-[#F9FBFF] rounded-none shadow p-6 mb-6 mt-6">
         <h2 className="text-lg font-semibold mb-4 text-gray-700">Summary &amp; Performance Trend</h2>
         <div className="flex flex-col md:flex-row gap-6">
           <div className="grid grid-cols-2 gap-4 flex-1">
@@ -198,7 +181,7 @@ export default function Report() {
               { title: ["Real", "Performance Ratio"], value: loadingPR ? "…" : realPR, unit: "%", color: "#E6C4FF" },
               { title: ["Performance", "Ratio"], value: rprRef, unit: "%", color: "#B9FBC0" },
             ].map((c, i) => (
-              <div key={i} className="rounded-2xl shadow-sm px-4 py-4 flex flex-col items-center justify-center text-center" style={{ backgroundColor: c.color }}>
+              <div key={i} className="rounded-none shadow-sm px-4 py-4 flex flex-col items-center justify-center text-center" style={{ backgroundColor: c.color }}>
                 <div className="text-sm font-medium text-gray-700 leading-tight whitespace-pre-line">{c.title.join("\n")}</div>
                 <div className="mt-3">
                   <p className="text-2xl font-bold text-gray-800 leading-tight">
@@ -209,7 +192,7 @@ export default function Report() {
               </div>
             ))}
           </div>
-          <div className="flex-1 bg-[#FFFFFF] rounded-2xl shadow-sm p-4">
+          <div className="flex-1 bg-[#FFFFFF] rounded-none shadow-sm p-4">
             <p className="text-sm font-medium text-gray-700 mb-2 text-center">Daily RPR (%) Trend</p>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyRPR.length > 0 ? dailyRPR : [{ date: "01", RPR: Number(realPR) || 0 }]} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
