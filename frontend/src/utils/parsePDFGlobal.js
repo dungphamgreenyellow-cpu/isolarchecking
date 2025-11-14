@@ -5,8 +5,8 @@
 export async function parsePDFGlobal(file) {
   const backendURL = import.meta.env.VITE_BACKEND_URL || "";
   const fd = new FormData();
-  // '/analysis/parse-pvsyst' accepts either 'pvsyst' or 'file'
-  fd.append("pvsyst", file);
+  // Backend expects 'pvsystFile' for PVSyst PDF
+  fd.append("pvsystFile", file);
 
   try {
     const res = await fetch(`${backendURL}/analysis/parse-pvsyst`, {
