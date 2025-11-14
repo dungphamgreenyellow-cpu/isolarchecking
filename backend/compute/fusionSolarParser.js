@@ -1,6 +1,9 @@
-// backend/compute/fusionSolarParser.js — CSV streaming only (v9.9-LTS baseline)
+// backend/compute/fusionSolarParser.js — CSV streaming + non-blocking XLSX→CSV
 import { parse } from "csv-parse";
-import { Readable } from "stream";
+import { Readable, PassThrough } from "stream";
+import fs from "fs";
+import path from "path";
+import XlsxExtractor from "xlsx-extract";
 
 const toYMD = (d) => {
   const dt = new Date(d);
@@ -25,11 +28,29 @@ export async function streamParseAndCompute(buffer) {
     let csvReadable;
 
     if (isXlsx) {
-      console.warn("[FusionSolarParser] XLSX file detected. Please export FusionSolar log as CSV and upload the CSV file for best performance.");
-      return {
-        success: false,
-        error: "XLSX file detected. Please export FusionSolar log as CSV from FusionSolar and upload the CSV file instead of XLSX.",
-      };
+      const tmpPath = path.join(process.env.TEMP || "/tmp", `fslog_${Date.now()}_${Math.random().toString(36).slice(2)}.xlsx`);
+      await fs.promises.writeFile(tmpPath, buffer);
+      const pass = new PassThrough();
+      const extractor = new XlsxExtractor(tmpPath, { sheet_id: 1 });
+      extractor.on("row", (row) => {
+        try {
+          const line = (Array.isArray(row) ? row : [row])
+            .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",") + "\n";
+          pass.write(line);
+        } catch (e) {
+          pass.destroy(e);
+        }
+      });
+      extractor.on("error", (err) => {
+        pass.destroy(err);
+      });
+      extractor.on("end", async () => {
+        pass.end();
+        try { await fs.promises.unlink(tmpPath); } catch {}
+      });
+      // Start extraction
+      extractor.extract();
+      csvReadable = pass;
     } else {
       // CSV buffer → UTF-8 text → stream
       const text = Buffer.isBuffer(buffer) ? buffer.toString("utf8") : String(buffer || "");
