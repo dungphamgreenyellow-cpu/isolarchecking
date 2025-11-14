@@ -5,7 +5,8 @@ import fs from "fs";
 // Fallback extraction: pdfjs-dist with simple token join
 
 export async function parsePVSystPDF(filePath) {
-  const buffer = await fs.promises.readFile(filePath);
+  try {
+    const buffer = await fs.promises.readFile(filePath);
 
   // === Try pdf-parse first (dynamic import, guarded) ===
   let used = "pdf-parse";
@@ -352,4 +353,8 @@ export async function parsePVSystPDF(filePath) {
     dc_ac_ratio,
     rawText: pdfText.slice(0, 1000),
   };
+  } catch (err) {
+    console.error("PVSyst parse error:", err);
+    return { success: false, error: err?.message || String(err) };
+  }
 }
