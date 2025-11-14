@@ -1,9 +1,7 @@
-// backend/compute/fusionSolarParser.js — CSV streaming + non-blocking XLSX→CSV
+// backend/compute/fusionSolarParser.js — Single pipeline: XLSX → CSV → CSV streaming parser
 import { parse } from "csv-parse";
-import { Readable, PassThrough } from "stream";
-import fs from "fs";
-import path from "path";
-import XlsxExtractor from "xlsx-extract";
+import { Readable } from "stream";
+import * as XLSX from "xlsx";
 
 const toYMD = (d) => {
   const dt = new Date(d);
@@ -23,40 +21,11 @@ const normalizeInverter = (raw) => {
 
 export async function streamParseAndCompute(buffer) {
   try {
-    const magic = buffer?.slice?.(0, 4)?.toString?.();
-    const isXlsx = magic === "PK\u0003\u0004"; // ZIP header for XLSX
-    let csvReadable;
-
-    if (isXlsx) {
-      const tmpPath = path.join(process.env.TEMP || "/tmp", `fslog_${Date.now()}_${Math.random().toString(36).slice(2)}.xlsx`);
-      await fs.promises.writeFile(tmpPath, buffer);
-      const pass = new PassThrough();
-      const extractor = new XlsxExtractor(tmpPath, { sheet_id: 1 });
-      extractor.on("row", (row) => {
-        try {
-          const line = (Array.isArray(row) ? row : [row])
-            .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",") + "\n";
-          pass.write(line);
-        } catch (e) {
-          pass.destroy(e);
-        }
-      });
-      extractor.on("error", (err) => {
-        pass.destroy(err);
-      });
-      extractor.on("end", async () => {
-        pass.end();
-        try { await fs.promises.unlink(tmpPath); } catch {}
-      });
-      // Start extraction
-      extractor.extract();
-      csvReadable = pass;
-    } else {
-      // CSV buffer → UTF-8 text → stream
-      const text = Buffer.isBuffer(buffer) ? buffer.toString("utf8") : String(buffer || "");
-      if (!text) return { success: false, note: "Empty CSV buffer" };
-      csvReadable = Readable.from(text);
-    }
+    // Single, strict path: XLSX buffer → CSV string → CSV parser stream
+    const workbook = XLSX.read(buffer, { type: "buffer", sheetStubs: false });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    const csvReadable = Readable.from(csv);
 
     return await new Promise((resolve, reject) => {
       const parser = parse({ relax_column_count: true, skip_empty_lines: true });
