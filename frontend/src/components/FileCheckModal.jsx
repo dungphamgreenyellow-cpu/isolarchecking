@@ -23,7 +23,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       let logRes = null, pvRes = null;
       try {
         if (logFile) {
-          const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
+          const backendURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
           // backendURL must be defined in production; warn removed for release build
           const formData = new FormData();
           formData.append("logfile", logFile);

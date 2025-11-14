@@ -15,11 +15,11 @@ router.post("/compute", async (req, res) => {
     const file = req.files?.logfile;
     if (!file?.data) return res.status(400).json({ success: false, error: "No logfile uploaded" });
     const result = await streamParseAndCompute(file.data);
-    
+
     const t1 = process.hrtime.bigint();
     return res.json({ success: true, data: result, parse_ms: Number(t1 - t0) / 1e6 });
   } catch (e) {
-    console.error("[/analysis/compute] Lỗi:", e);
+    
     return res.status(500).json({ success: false, message: "Backend crash", error: e.message });
   }
 });
@@ -39,7 +39,6 @@ router.post("/realpr", async (req, res) => {
   const result = computeRealPerformanceRatio(parsed, dailyGHI, capacity);
   return res.json({ success: true, data: result });
   } catch (e) {
-    console.error(e);
     return res.status(500).json({ success: false, error: e?.message });
   }
 });
@@ -57,7 +56,6 @@ router.post("/upload-test-log", async (req, res) => {
 
     return res.json({ success: true, message: "Đã lưu test_FusionSolar.csv" });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -72,7 +70,6 @@ router.post("/upload-test-pdf", async (req, res) => {
 
     return res.json({ success: true, message: "Đã lưu test_PVSyst.pdf" });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -91,7 +88,6 @@ router.post("/parse-pvsyst", async (req, res) => {
     try { await fs.promises.unlink(tmpPath); } catch {}
     return res.json({ success: true, ms: dt, data: info });
   } catch (err) {
-    console.error("parse-pvsyst error:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -106,7 +102,6 @@ router.get("/compute-test", async (_req, res) => {
     const result = await streamParseAndCompute(buf);
     return res.json({ success: true, data: result, source: "test-data" });
   } catch (err) {
-    console.error("[/analysis/compute-test]", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -121,7 +116,6 @@ router.get("/parse-pvsyst-test", async (_req, res) => {
     const ms = performance.now() - t0;
     return res.json({ success: true, ms, data: info, source: "test-data" });
   } catch (err) {
-    console.error("[/analysis/parse-pvsyst-test]", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

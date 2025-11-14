@@ -1,10 +1,6 @@
-// === /src/utils/irradianceGenerator.js — v9.6-LTS (Sinusoidal Power Profile, Safe Export) ===
-// ✅ Input: dailyGHI[]  (kWh/m² per day), stepMinutes (2,5,10,15...)
-// ✅ Output: per-slot *power* array (kW/m²/slot). Tổng POWER/12 = GHI energy.
-// ✅ Shape: nửa sin từ 06:00–18:00 (có thể chỉnh daylightHours và dayStartHour)
-//
-// Công thức: s_j = sin(pi*(j+0.5)/N), j=0..N-1
-// Tổng công suất được scale sao cho sum(power)/12 == GHI(day)
+// irradianceGenerator.js — v9.6-LTS (sinusoidal profile, cleaned)
+// Input: dailyGHI[] (kWh/m²/day), stepMinutes, daylightHours, dayStartHour
+// Output: power per slot (kW/m²); sum(power)/12 == GHI(day)
 
 export const generateDailyIrrPowerProfile = (
   dailyGHI,
@@ -41,10 +37,8 @@ export const generateDailyIrrPowerProfile = (
       }
     }
 
-    console.log(`✅ generateDailyIrrPowerProfile: ${result.length} slots created (sin profile)`);
     return result; // power per slot (kW/m²)
   } catch (err) {
-    console.error("❌ Error in generateDailyIrrPowerProfile:", err);
     return [];
   }
 };

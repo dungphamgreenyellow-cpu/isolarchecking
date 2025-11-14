@@ -6,9 +6,7 @@
 // ✅ Compatible with Report v8.5.2-LTS
 
 export function computeRealPerformanceRatio(parsed, dailyGHI, capKWp) {
-  console.log("===== [RPR v9.9.7-Pro] – Physically Correct Dynamic-Sin =====");
   if (!parsed?.records?.length || !capKWp) {
-    console.warn("No valid records or missing capacity → return 0");
     return "0.00";
   }
 
@@ -23,7 +21,6 @@ export function computeRealPerformanceRatio(parsed, dailyGHI, capKWp) {
 
   const slotsArr = Array.from(uniqueSlots.values());
   const connectedSlots = slotsArr.length;
-  console.log("Connected UNIQUE slots:", connectedSlots);
 
   // --- Compute total E_ac ---
   const eac =
@@ -31,29 +28,20 @@ export function computeRealPerformanceRatio(parsed, dailyGHI, capKWp) {
       (sum, r) => sum + (Number(r["Active power(kW)"] || r["Active power"] || 0) / 12),
       0
     ) || 0;
-  console.log("⚡ E_ac (from Active Power):", eac.toFixed(3), "kWh");
 
   // --- Estimate total E_irr ---
   const avgDailyGHI =
     dailyGHI?.length > 0 ? dailyGHI.reduce((a, b) => a + b, 0) / dailyGHI.length : 0;
   const eirr = avgDailyGHI * (connectedSlots / 288);
-  console.log("☀️ E_irr (from Irradiance):", eirr.toFixed(3), "kWh/m²");
-
-  console.log("System Capacity (kWp):", capKWp);
 
   // --- Compute Real PR ---
   const pr = capKWp > 0 && eirr > 0 ? (eac / (capKWp * eirr)) * 100 : 0;
-  console.log("➜ Real PR:", pr.toFixed(2), "%");
-
-  console.log("===== [RPR CALC END] =====");
   return pr.toFixed(2);
 }
 
 // === Daily RPR Series (for trendline chart) ===
 export function computeDailyRPRSeries(parsed, dailyGHI, capKWp) {
-  console.log("===== [RPR v9.9.7-Pro] – computeDailyRPRSeries() =====");
   if (!parsed?.dailyProduction?.length || !capKWp) {
-    console.warn("No dailyProduction data found → returning empty series");
     return [];
   }
 
@@ -65,7 +53,6 @@ export function computeDailyRPRSeries(parsed, dailyGHI, capKWp) {
     return { date: String(i + 1).padStart(2, "0"), RPR: Number(rpr.toFixed(1)) };
   });
 
-  console.log("Generated daily RPR series:", series.length, "days");
   return series;
 }
 

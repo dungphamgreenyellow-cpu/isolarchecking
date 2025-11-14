@@ -1,10 +1,8 @@
-// === /server/compute/realPRCalculator.js — v9.4.1-LTS (Node Cloud Compatible) ===
-// ✅ Backend-safe (no browser APIs)
-// ✅ Computes Real Performance Ratio (RPR)
-// ✅ Uses 5-min interpolated irradiance or daily GHI baseline
-// ✅ Filters only “Grid Connected” inverters
-// ✅ Converts irradiance from W/m² → kWh/m²
-// ✅ Normalizes 5-min data (÷12) and logs details if debug enabled
+// realPRCalculator.js — v9.4-LTS (cleaned, logic unchanged)
+// - Computes RPR
+// - Filters Grid Connected
+// - Irradiance from dailyGHI or log fields
+// - Normalizes 5-min data (÷12) and W/m² → kWh/m²
 
 export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, debug = false) {
   try {
@@ -57,7 +55,7 @@ export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, deb
     const Eirr_kWhm2 = eirr;
 
     // --- 5. Compute PR ---
-    const pr = (Eac_kWh / (Eirr_kWhm2 * capacity)) * 100;
+    const pr = Eirr_kWhm2 > 0 && capacity > 0 ? (Eac_kWh / (Eirr_kWhm2 * capacity)) * 100 : 0;
 
     // debug logs removed for release cleanliness
 
@@ -112,7 +110,7 @@ export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, deb
       dailySeries.push({ date: day, RPR: parseFloat(rprDay.toFixed(2)), Eac: parseFloat(eacDay.toFixed(2)), Eirr: parseFloat(eirrDay.toFixed(3)) });
     }
 
-    return {
+    const resp = {
       RPR: parseFloat(pr.toFixed(2)),
       Eac_kWh: parseFloat(Eac_kWh.toFixed(2)),
       Eirr_kWhm2: parseFloat(Eirr_kWhm2.toFixed(3)),
@@ -120,8 +118,11 @@ export function computeRealPerformanceRatio(parsed, dailyGHI = [], capacity, deb
       totalSlots,
       dailySeries,
     };
+    if (!(Eirr_kWhm2 > 0)) {
+      resp.warning = "Missing or zero irradiance; PR set to 0";
+    }
+    return resp;
   } catch (err) {
-    console.error("⚠️ RPR compute error:", err.message);
     return { RPR: 0, error: err.message };
   }
 }

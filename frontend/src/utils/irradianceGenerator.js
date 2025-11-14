@@ -41,7 +41,6 @@ export const generateDailyIrrPowerProfile = (
       }
     }
 
-    console.log(`✅ generateDailyIrrPowerProfile: ${result.length} slots created (sin profile)`);
     return result; // power per slot (kW/m²)
   } catch (err) {
     console.error("❌ Error in generateDailyIrrPowerProfile:", err);
