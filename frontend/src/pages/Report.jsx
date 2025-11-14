@@ -54,7 +54,12 @@ export default function Report() {
   const proj = projectData || confirmData || {};
   const {
     siteName,
-    location: gps,
+    gps, // new explicit GPS string (formatted "lat°, long°")
+    pvModel,
+    inverterModel,
+    firstDay,
+    lastDay,
+    location: legacyLocation, // backward compatibility
     installed,
     module,
     inverter,

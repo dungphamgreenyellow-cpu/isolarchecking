@@ -183,7 +183,7 @@ export async function parsePVSystPDF(filePath) {
     find(/((?:AC|Inverter)\s*(?:power|capacity))[:\-\s]*([\d.,\s]+\s*(?:kWac|kW|MWac|kVA|MVA))/i);
 
   // Models (prefer 'Manufacturer Model <name> (' patterns)
-  let moduleModel =
+  let pvModel =
     (pdfText.match(/PV\s+module\s+Manufacturer\s+Model\s+([^()\n]+?)\s*\(/i) || [])[1]?.trim() ||
     find(/((?:Module|PV module|Module type))[:\-\s]*([^\n]+)/i);
   let inverterModel =
@@ -206,7 +206,10 @@ export async function parsePVSystPDF(filePath) {
   // GPS: prefer a short window around the first Latitude occurrence (since pdfText may be single-line)
   const latIdx = pdfText.search(/Lat(?:itude)?\s+Longitude/i);
   const gpsLine = latIdx >= 0 ? pdfText.slice(latIdx, latIdx + 120) : "";
-  const gps = gpsLine ? parseLatLon(gpsLine) : { lat: null, lon: null };
+  const gpsObj = gpsLine ? parseLatLon(gpsLine) : { lat: null, lon: null };
+  const gps = gpsObj.lat != null && gpsObj.lon != null
+    ? `${gpsObj.lat.toFixed(4)}°, ${gpsObj.lon.toFixed(4)}°`
+    : null;
 
   // Normalize units: MWp -> kWp, MWac -> kW
   const toKWp = (s) => {
@@ -341,7 +344,7 @@ export async function parsePVSystPDF(filePath) {
     capacities: { dc_kWp, ac_kW },
     capacity_dc_kwp,
     cod_date,
-    moduleModel,
+    pvModel,
     inverterModel,
     tilt_deg,
     azimuth_deg,
