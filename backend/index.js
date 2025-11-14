@@ -1,7 +1,6 @@
 // backend/index.js — Local-first setup, simplified CORS for localhost
 import express from "express";
 import cors from "cors";
-import fileUpload from "express-fileupload";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
@@ -16,14 +15,7 @@ const PORT = process.env.PORT || 8080;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// === Upload lớn (dùng /tmp cho Render)
-app.use(
-  fileUpload({
-    useTempFiles: true,
-    tempFileDir: "/tmp/",
-    limits: {}, // unlimited
-  })
-);
+// Uploads: handled solely by multer (memoryStorage) in route modules
 
 // Updated CORS whitelist (remove previous dynamic logic)
 app.use(cors({
