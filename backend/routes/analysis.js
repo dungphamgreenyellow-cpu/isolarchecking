@@ -17,6 +17,15 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
       return res.json({ success: false, error: "No logfile uploaded" });
     }
 
+    // DEBUG BUFFER SIGNATURE (temporary, not committed yet)
+    console.log("DEBUG BUFFER:", {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      length: req.file.buffer.length,
+      first16: req.file.buffer.slice(0, 16),
+      hexFirst16: Array.from(req.file.buffer.slice(0, 16)).map(b => b.toString(16).padStart(2, "0")).join(" ")
+    });
+
     const result = await streamParseAndCompute(req.file.buffer);
     return res.json(result);
 
