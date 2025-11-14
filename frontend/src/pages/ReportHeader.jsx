@@ -49,57 +49,45 @@ export default function ReportHeader({
 
   /** ========== UI RENDER ========== **/
   return (
-    <div className="flex flex-col items-center bg-white text-slate-800 relative min-h-[1123px]">
-      <div className="w-[794px] bg-amber-50 border-b border-amber-200 px-10 py-8 shadow-sm">
-        {/* Header Title */}
-        <div className="flex items-start justify-between mb-6">
+    <div className="w-full rounded-2xl shadow-sm px-6 py-4 md:px-8 md:py-6 bg-blue-600 text-white">
+        <div className="flex items-start justify-between mb-4">
           <div>
-            <h1 className="text-[26px] font-bold text-slate-900 leading-tight">
+            <h1 className="text-[22px] md:text-[24px] font-bold leading-tight">
               Site Performance Report
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Period: {periodBox} • Generated: {generatedAt}
+            <p className="text-xs md:text-sm text-white/80 mt-1">
+              Period: <span className="font-medium text-white">{periodBox}</span> • Generated: <span className="font-medium text-white">{generatedAt}</span>
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[16px] font-semibold text-amber-700 max-w-[360px] truncate" title={siteName}>
+            <p className="text-[15px] md:text-[16px] font-semibold max-w-[360px] truncate" title={siteName}>
               {siteName}
             </p>
-            <p className="text-sm text-slate-600">{gps || "—"}</p>
+            <p className="text-xs md:text-sm text-white/80">{gps || "—"}</p>
           </div>
         </div>
-
-        <div className="border-t border-amber-200 mb-6" />
-
-        {/* Technical info */}
-        <div className="grid grid-cols-5 gap-x-8 gap-y-3 text-[14px]">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Installed Capacity</p>
-            <p className="font-semibold text-slate-900 mt-1">{installedCapacity}</p>
+        <div className="grid gap-3 md:gap-5 mt-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-5 text-sm">
+          <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-white/70">Installed Capacity</p>
+            <p className="font-semibold mt-1">{installedCapacity || "—"}</p>
           </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">PV / INV</p>
-            <p className="font-semibold text-slate-900 mt-1 leading-snug truncate" title={pvInvBox}>{pvInvBox}</p>
+          <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-white/70">PV / INV</p>
+            <p className="font-medium mt-1 leading-snug truncate" title={pvInvBox}>{pvInvBox}</p>
           </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">COD</p>
-            <p className="font-semibold text-slate-900 mt-1">{codDate}</p>
+          <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-white/70">COD</p>
+            <p className="font-semibold mt-1">{codDate || "—"}</p>
           </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">GPS</p>
-            <p className="font-semibold text-slate-900 mt-1 truncate" title={gps}>{gps || "—"}</p>
+          <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-white/70">GPS</p>
+            <p className="font-medium mt-1 truncate" title={gps}>{gps || "—"}</p>
           </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Period</p>
-            <p className="font-semibold text-slate-900 mt-1">{periodBox}</p>
+          <div className="bg-white/10 border border-white/20 rounded-lg px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-white/70">Period</p>
+            <p className="font-semibold mt-1">{periodBox}</p>
           </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="absolute bottom-6 right-[calc(50%-397px+1.5rem)] text-[12px] text-slate-400 italic">
-        iSolarChecking • Automated PV Performance Analytics
-      </div>
     </div>
   );
 }

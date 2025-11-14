@@ -6,6 +6,7 @@
 // ✅ Pastel A4 layout
 
 import React from "react";
+import ReportHeader from "./ReportHeader.jsx";
 import { useLocation } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { getMonthlyGHI } from "../data/ghiBaseline";
@@ -156,45 +157,20 @@ export default function Report() {
   };
 
   return (
-    <div className="bg-white min-h-screen flex flex-col items-center text-gray-800">
-      {/* HEADER */}
-      <div className="w-full max-w-[850px] bg-[#2563EB] rounded-lg shadow-md px-6 md:px-10 py-6 text-white">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-3">
-          <div>
-            <h1 className="text-[22px] md:text-[24px] font-bold tracking-tight">Site Performance Report</h1>
-            <div className="h-[3px] w-14 bg-white/80 rounded-full mt-1 mb-2"></div>
-            <div className="flex flex-wrap items-center gap-2 text-sm md:text-base">
-              <p className="font-semibold">{(confirmData?.siteName || siteName) || "Unnamed Site"}</p>
-              <p className="text-gray-100">• COD: <span className="font-medium text-white">{confirmData?.codDate || cod || "--"}</span></p>
-            </div>
-          </div>
-          <div className="text-left md:text-right text-xs text-gray-100 leading-5 mt-3 md:mt-1">
-            <p>Period: <span className="font-medium text-white">{periodText}</span></p>
-            <p>Generated: <span className="font-medium text-white">{generatedText}</span></p>
-            <p className="mt-1">Capacity Ref: <span className="font-medium text-white">{confirmData?.installedCapacity ? `${confirmData.installedCapacity} kWp` : (installed || "—")}</span></p>
-          </div>
-        </div>
-        <div className="grid gap-3 md:gap-5 mt-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-[0.9fr_1fr_1.6fr]">
-          <div className="bg-white/10 border border-white/25 rounded-xl px-5 py-3">
-            <p className="text-[13px] text-gray-200 font-medium mb-1">📍 GPS</p>
-            <p className="text-white font-medium text-sm md:text-base">{gps || "—"}</p>
-          </div>
-          <div className="bg-white/10 border border-white/25 rounded-xl px-5 py-3">
-            <p className="text-[13px] text-gray-200 font-medium mb-1">⚡ Capacity</p>
-            <p className="text-white font-semibold text-sm md:text-base">{confirmData?.installedCapacity ? `${confirmData.installedCapacity} kWp` : (installed || "—")}</p>
-          </div>
-          <div className="bg-white/10 border border-white/25 rounded-xl px-5 py-3">
-            <p className="text-[13px] text-gray-200 font-medium mb-1">🔧 PV / INV</p>
-            <div className="text-white font-medium leading-snug">
-              <p className="truncate text-[12px] md:text-[14px]">{module || "—"}</p>
-              <p className="whitespace-normal overflow-hidden text-[12px] md:text-[14px]" style={{ fontSize: getFontSizeForInverter(inverter) }}>{inverter || "—"}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* PROJECT INFO */}
-      <div className="w-full max-w-[850px] bg-white rounded-lg border border-gray-200 shadow-sm p-5 mt-5">
+    <div className="w-full min-h-screen bg-[#f6f9ff]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <ReportHeader
+          siteName={projectData?.siteName}
+          installedCapacity={projectData?.capacity_dc_kwp}
+          codDate={projectData?.codDate}
+          gps={projectData?.gps}
+          pvModel={projectData?.pvModel}
+          inverterModel={projectData?.inverterModel}
+          firstDay={projectData?.firstDay}
+          lastDay={projectData?.lastDay}
+        />
+        {/* PROJECT INFO */}
+      <div className="w-full bg-white rounded-lg border border-gray-200 shadow-sm p-5 mt-6">
         <h2 className="text-base font-semibold mb-3 text-gray-700">Project Info</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div>
@@ -211,9 +187,8 @@ export default function Report() {
           </div>
         </div>
       </div>
-
       {/* SUMMARY & CHART */}
-      <div className="w-full max-w-[850px] bg-[#F9FBFF] rounded-lg shadow p-6 mb-6 mt-5">
+      <div className="w-full bg-[#F9FBFF] rounded-lg shadow p-6 mb-6 mt-6">
         <h2 className="text-lg font-semibold mb-4 text-gray-700">Summary &amp; Performance Trend</h2>
         <div className="flex flex-col md:flex-row gap-6">
           <div className="grid grid-cols-2 gap-4 flex-1">
@@ -254,8 +229,9 @@ export default function Report() {
         <div className="mt-4 text-sm text-gray-600">Advanced Analysis Enabled • RPR: {rprData.RPR ? rprData.RPR.toFixed(2) + "%" : "N/A"}</div>
       )}
 
-      <div className="w-full max-w-[850px] flex justify-end pr-3 mt-auto mb-4">
+      <div className="w-full flex justify-end pr-3 mt-auto mb-4">
         <p className="text-[11px] italic text-gray-400 font-light">Automatically generated by iSolarChecking</p>
+      </div>
       </div>
     </div>
   );
