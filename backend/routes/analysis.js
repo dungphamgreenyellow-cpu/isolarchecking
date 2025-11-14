@@ -75,17 +75,17 @@ router.post("/upload-test-pdf", async (req, res) => {
   }
 });
 
-// Optional mirror endpoint: POST /analysis/parse-pvsyst
-router.post("/parse-pvsyst", async (req, res) => {
+// POST /analysis/parse-pvsyst (multer memoryStorage)
+router.post("/parse-pvsyst", upload.single("pvsystFile"), async (req, res) => {
   try {
-    const file = req.files?.pvsyst || req.files?.file;
-    if (!file?.data) return res.status(400).json({ success: false, error: "No PDF uploaded" });
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ success: false, error: "No PDF uploaded" });
+    }
     const tmpPath = `/tmp/pvsyst_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`;
-    await file.mv(tmpPath);
+    await fs.promises.writeFile(tmpPath, req.file.buffer);
     const t0 = performance.now();
     const info = await parsePVSystPDF(tmpPath);
     const dt = performance.now() - t0;
-    
     try { await fs.promises.unlink(tmpPath); } catch {}
     return res.json({ success: true, ms: dt, data: info });
   } catch (err) {
