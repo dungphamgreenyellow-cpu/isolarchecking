@@ -4,8 +4,9 @@
 // ✅ Thêm timeout & withCredentials để tránh lỗi CORS khi deploy
 
 import axios from "axios";
+import { getBackendBaseUrl } from "../config";
 
-const baseURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+const baseURL = getBackendBaseUrl();
 
 const api = axios.create({
   baseURL,

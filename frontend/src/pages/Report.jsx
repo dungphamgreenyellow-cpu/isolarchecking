@@ -10,6 +10,7 @@ import ReportHeader from "./ReportHeader.jsx";
 import { useLocation } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { getMonthlyGHI } from "../data/ghiBaseline";
+import { getBackendBaseUrl } from "../config";
 
 function fmtMonthRange(start, end) {
   if (!start || !end) return "—";
@@ -29,7 +30,7 @@ function todayStr() {
   });
 }
 
-const backend = import.meta.env.VITE_BACKEND_URL;
+const backend = getBackendBaseUrl();
 
 export default function Report() {
   const location = useLocation();

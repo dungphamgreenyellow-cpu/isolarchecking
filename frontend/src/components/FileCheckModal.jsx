@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from "react";
 import { parsePDFGlobal } from "../utils/parsePDFGlobal";
+import { getBackendBaseUrl } from "../config";
 // XLSX→CSV conversion removed — backend now handles XLSX directly
 
 // Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
@@ -24,7 +25,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
       let logRes = null, pvRes = null;
       try {
         if (logFile) {
-          const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
+          const backendURL = getBackendBaseUrl(); // MUST be defined in .env for Render
           // backendURL must be defined in production; warn removed for release build
           const formData = new FormData();
           // Always send raw file (no XLSX→CSV conversion on FE)

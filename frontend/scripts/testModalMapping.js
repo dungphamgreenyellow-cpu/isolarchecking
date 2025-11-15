@@ -1,8 +1,9 @@
 // Simple script to simulate ProjectConfirmModal auto-fill mapping
 import fs from 'fs';
 import fetch from 'node-fetch';
+import { getBackendBaseUrl } from "../src/config";
 
-const BACKEND = 'http://localhost:3001';
+const BACKEND = getBackendBaseUrl();
 
 function mapToModal(initialData, prevForm = {}) {
   const dc = initialData?.capacityDCkWp ?? initialData?.capacity_dc_kwp ?? initialData?.capacities?.dc_kWp ?? prevForm.capacityDCkWp;

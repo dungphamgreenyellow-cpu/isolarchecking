@@ -9,9 +9,10 @@ import { useNavigate } from "react-router-dom";
 // removed legacy api helpers; all calls use fetch/axios directly
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
+import { getBackendBaseUrl } from "../config";
 
 // Backend base URL (ensure correct Render domain fallback)
-const backend = import.meta.env.VITE_BACKEND_URL || "https://isolarchecking-backend.onrender.com";
+const backend = getBackendBaseUrl();
 
 // === Quick helper ===
 function inferCountryFromLocation(str = "") {

@@ -2,8 +2,10 @@
 // Normalized output aligns with ProjectConfirmModal expectations
 // { siteName, gps: {lat, lon}, capacity_dc_kwp, capacity_ac_kw, module_model, inverter_model, tilt_deg, azimuth_deg, soiling_loss_percent, dc_ac_ratio, _raw }
 
+import { getBackendBaseUrl } from "../config";
+
 export async function parsePDFGlobal(file) {
-  const backendURL = import.meta.env.VITE_BACKEND_URL || "";
+  const backendURL = getBackendBaseUrl();
   const fd = new FormData();
   // Backend expects 'pvsystFile' for PVSyst PDF
   fd.append("pvsystFile", file);
