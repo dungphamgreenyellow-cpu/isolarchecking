@@ -17,17 +17,11 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
       return res.json({ success: false, error: "No logfile uploaded" });
     }
 
-    // DEBUG BUFFER SIGNATURE (temporary, not committed yet)
-    console.log("DEBUG BUFFER:", {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      length: req.file.buffer.length,
-      first16: req.file.buffer.slice(0, 16),
-      hexFirst16: Array.from(req.file.buffer.slice(0, 16)).map(b => b.toString(16).padStart(2, "0")).join(" ")
-    });
-
+    const t0 = performance.now();
     const result = await streamParseAndCompute(req.file.buffer);
-    return res.json(result);
+    const ms = performance.now() - t0;
+    // Wrap in a stable shape so FE can rely on data field
+    return res.json({ success: true, data: result, parse_ms: ms });
 
   } catch (err) {
     console.error("Compute Error:", err);
@@ -52,38 +46,6 @@ router.post("/realpr", async (req, res) => {
     return res.json({ success: false, error: err.message });
   }
 });
-
-export default router;
-
-// Routes for uploading test files to backend/test-data (debug helpers)
-router.post("/upload-test-log", async (req, res) => {
-  try {
-    const file = req.files?.logfile;
-    if (!file) return res.status(400).json({ success: false, error: "logfile thiếu" });
-
-    const savePath = path.join(process.cwd(), "backend/test-data/test_FusionSolar.csv");
-    await file.mv(savePath);
-
-    return res.json({ success: true, message: "Đã lưu test_FusionSolar.csv" });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.post("/upload-test-pdf", async (req, res) => {
-  try {
-    const file = req.files?.pvsyst;
-    if (!file) return res.status(400).json({ success: false, error: "pvsyst thiếu" });
-
-    const savePath = path.join(process.cwd(), "backend/test-data/test_PVSyst.pdf");
-    await file.mv(savePath);
-
-    return res.json({ success: true, message: "Đã lưu test_PVSyst.pdf" });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // POST /analysis/parse-pvsyst (multer memoryStorage)
 router.post("/parse-pvsyst", upload.single("pvsystFile"), async (req, res) => {
   try {
@@ -102,30 +64,6 @@ router.post("/parse-pvsyst", upload.single("pvsystFile"), async (req, res) => {
   }
 });
 
-// === Dev-only helpers: parse local test files without uploading
-// GET /analysis/compute-test → parse backend/test-data/test_FusionSolar.xlsx
-router.get("/compute-test", async (_req, res) => {
-  try {
-    const p1 = path.join(process.cwd(), "backend/test-data/test_FusionSolar.xlsx");
-    if (!fs.existsSync(p1)) return res.status(404).json({ success: false, error: "Missing backend/test-data/test_FusionSolar.xlsx" });
-    const buf = await fs.promises.readFile(p1);
-    const result = await streamParseAndCompute(buf);
-    return res.json({ success: true, data: result, source: "test-data" });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
+export default router;
 
-// GET /analysis/parse-pvsyst-test → parse backend/test-data/test_PVSyst.pdf
-router.get("/parse-pvsyst-test", async (_req, res) => {
-  try {
-    const p2 = path.join(process.cwd(), "backend/test-data/test_PVSyst.pdf");
-    if (!fs.existsSync(p2)) return res.status(404).json({ success: false, error: "Missing backend/test-data/test_PVSyst.pdf" });
-    const t0 = performance.now();
-    const info = await parsePVSystPDF(p2);
-    const ms = performance.now() - t0;
-    return res.json({ success: true, ms, data: info, source: "test-data" });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
+

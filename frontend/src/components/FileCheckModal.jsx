@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from "react";
 import { parsePDFGlobal } from "../utils/parsePDFGlobal";
+import { xlsxFileToCsvBlob } from "../utils/xlsxToCsv";
 
 // Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
 // (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
@@ -26,7 +27,20 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
           // backendURL must be defined in production; warn removed for release build
           const formData = new FormData();
-          formData.append("logfile", logFile);
+          // If XLSX/XLS, convert to CSV on FE, else pass-through
+          let uploadFile = logFile;
+          const name = logFile?.name || "";
+          if (/\.(xlsx|xls)$/i.test(name)) {
+            try {
+              const csvBlob = await xlsxFileToCsvBlob(logFile);
+              const csvName = name.replace(/\.(xlsx|xls)$/i, ".csv");
+              uploadFile = new File([csvBlob], csvName, { type: "text/csv" });
+            } catch (convErr) {
+              // Fall back to original file if conversion fails
+              console.warn("XLSX->CSV conversion failed, sending original:", convErr);
+            }
+          }
+          formData.append("logfile", uploadFile);
           const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
             let lastErr = null;
             for (let i = 0; i < retries; i++) {
@@ -50,12 +64,14 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
             setLogStatus({ ok: false, msg: "Invalid JSON response" });
           }
           if (data?.success) {
-            // success: backend returns { success: true, data: {...}, parse_ms }
+            // Support both shapes: { success, data: {...} } or flat { success, ... }
+            const payload = data.data && typeof data.data === "object" ? data.data : data;
             setLogStatus({ ok: true, msg: "FusionSolar log parsed successfully" });
-            logRes = { ...data.data, success: true, parse_ms: data.parse_ms };
-            // populate Site Name from log if present
-            if (data?.data?.siteName && setProjectInfo) {
-              setProjectInfo((prev) => ({ ...prev, siteName: data.data.siteName }));
+            logRes = { ...payload, success: true, parse_ms: data.parse_ms };
+            // Populate Site Name if present
+            const siteName = payload?.siteName;
+            if (siteName && setProjectInfo) {
+              setProjectInfo((prev) => ({ ...prev, siteName }));
             }
           } else {
             setLogStatus({ ok: false, msg: data?.message || "Error reading log file" });
