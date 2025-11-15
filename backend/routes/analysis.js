@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
+import { computeFusionFromXlsx } from "../compute/computeFusionFromXlsx.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
 import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 
@@ -18,7 +19,14 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
     }
 
     const t0 = performance.now();
-    const result = await streamParseAndCompute(req.file.buffer);
+    const originalname = (req.file.originalname || "").toLowerCase();
+
+    let result;
+    if (/\.(xlsx|xlsm|xls)$/i.test(originalname)) {
+      result = await computeFusionFromXlsx(req.file.buffer);
+    } else {
+      result = await streamParseAndCompute(req.file.buffer);
+    }
     const ms = performance.now() - t0;
     // Wrap in a stable shape so FE can rely on data field
     return res.json({ success: true, data: result, parse_ms: ms });

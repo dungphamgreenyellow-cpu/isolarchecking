@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from "react";
 import { parsePDFGlobal } from "../utils/parsePDFGlobal";
-import { xlsxFileToCsvBlob } from "../utils/xlsxToCsv";
+// XLSX→CSV conversion removed — backend now handles XLSX directly
 
 // Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
 // (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
@@ -27,20 +27,8 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           const backendURL = import.meta.env.VITE_BACKEND_URL || ""; // MUST be defined in .env for Render
           // backendURL must be defined in production; warn removed for release build
           const formData = new FormData();
-          // If XLSX/XLS, convert to CSV on FE, else pass-through
-          let uploadFile = logFile;
-          const name = logFile?.name || "";
-          if (/\.(xlsx|xls)$/i.test(name)) {
-            try {
-              const csvBlob = await xlsxFileToCsvBlob(logFile);
-              const csvName = name.replace(/\.(xlsx|xls)$/i, ".csv");
-              uploadFile = new File([csvBlob], csvName, { type: "text/csv" });
-            } catch (convErr) {
-              // Fall back to original file if conversion fails
-              console.warn("XLSX->CSV conversion failed, sending original:", convErr);
-            }
-          }
-          formData.append("logfile", uploadFile);
+          // Always send raw file (no XLSX→CSV conversion on FE)
+          formData.append("logfile", logFile);
           const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
             let lastErr = null;
             for (let i = 0; i < retries; i++) {
