@@ -4,6 +4,6 @@ services:
     env: node
     plan: free
     rootDir: backend
-    buildCommand: npm ci || npm install
-    startCommand: npm start
+    buildCommand: npm install --omit=dev
+    startCommand: node index.js
     autoDeploy: false
