@@ -10,7 +10,6 @@
     "cors": "^2.8.5",
     "csv-parse": "^5.5.6",
     "esbuild-wasm": "^0.27.0",
-    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "form-data": "^4.0.4",
     "multer": "^1.4.5-lts.1",
