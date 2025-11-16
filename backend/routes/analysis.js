@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import { Readable } from "stream";
 import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
+import { xlsxStreamToCsv } from "../compute/xlsxStreamToCsv.js";
 import { xmlToCsv } from "../compute/xmlToCsv.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
 import { parsePVSystPDF } from "../compute/parsePVSyst.js";
@@ -23,7 +24,11 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
     const originalname = (req.file.originalname || "").toLowerCase();
 
     let result;
-    if (/\.xml$/i.test(originalname)) {
+    if (/\.xlsx$/i.test(originalname)) {
+      const csv = xlsxStreamToCsv(req.file.buffer);
+      const csvStream = Readable.from(csv);
+      result = await streamParseAndCompute(csvStream);
+    } else if (/\.xml$/i.test(originalname)) {
       const csv = xmlToCsv(req.file.buffer);
       const csvStream = Readable.from(csv);
       result = await streamParseAndCompute(csvStream);
