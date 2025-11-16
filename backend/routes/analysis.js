@@ -3,8 +3,9 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
 import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
-import { computeFusionFromXlsx } from "../compute/computeFusionFromXlsx.js";
+import { xmlToCsv } from "../compute/xmlToCsv.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
 import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 
@@ -22,10 +23,14 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
     const originalname = (req.file.originalname || "").toLowerCase();
 
     let result;
-    if (/\.(xlsx|xlsm|xls)$/i.test(originalname)) {
-      result = await computeFusionFromXlsx(req.file.buffer);
-    } else {
+    if (/\.xml$/i.test(originalname)) {
+      const csv = xmlToCsv(req.file.buffer);
+      const csvStream = Readable.from(csv);
+      result = await streamParseAndCompute(csvStream);
+    } else if (/\.csv$/i.test(originalname)) {
       result = await streamParseAndCompute(req.file.buffer);
+    } else {
+      return res.json({ success: false, error: "Invalid file type" });
     }
     const ms = performance.now() - t0;
     // Wrap in a stable shape so FE can rely on data field

@@ -3,7 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 const HEADER = [
   "Start Time",
   "ManageObject",
-  "Total yield",
+  "Total yield(kWh)",
 ];
 
 function normalizeRecord(node = {}) {
@@ -24,16 +24,17 @@ function normalizeRecord(node = {}) {
 
   const entries = Object.entries(flat).reduce((acc, [k, v]) => {
     const lk = k.toLowerCase();
-    if (!acc.start && /start.?time|timestamp|time/i.test(lk)) acc.start = v;
-    if (!acc.inv && /manageobject|device.?name|inverter/i.test(lk)) acc.inv = v;
-    if (!acc.yield && /total.?yield\(?kwh\)?|eac|energy.?total/i.test(lk)) acc.yield = v;
+    if (!acc.start && /(start[_ ]?time|timestamp)/i.test(lk)) acc.start = v;
+    if (!acc.inv && /(manageobject|device|inverter)/i.test(lk)) acc.inv = v;
+    if (!acc.yield && /(total[_ ]?yield(\(kwh\))?|yield|eac|energy)/i.test(lk)) acc.yield = v;
     return acc;
   }, { start: null, inv: null, yield: null });
 
-  if (entries.start == null && entries.inv == null && entries.yield == null) {
+  // Require all three fields to avoid noisy rows
+  if (entries.start == null || entries.inv == null || entries.yield == null) {
     return null;
   }
-  return [entries.start ?? "", entries.inv ?? "", entries.yield ?? ""];
+  return [String(entries.start), String(entries.inv), String(entries.yield)];
 }
 
 export function xmlToCsv(buffer) {
