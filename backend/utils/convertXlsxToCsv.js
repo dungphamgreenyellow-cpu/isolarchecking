@@ -13,16 +13,10 @@ export function convertXlsxToCsv(inputPath, outputPath) {
 				if (err) {
 					return reject(new Error(stderr || err.message));
 				}
-				// Ignore openpyxl warnings in stderr
+				// Ignore openpyxl warnings
 				if (stderr && stderr.trim()) {
-					const cleaned = stderr
-						.split("\n")
-						.filter(line => !line.includes("UserWarning"))
-						.join("\n")
-						.trim();
-
-					if (cleaned.length > 0) {
-						return reject(new Error(cleaned));
+					if (!stderr.includes("UserWarning")) {
+						return reject(new Error(stderr.trim()));
 					}
 				}
 				if (!stdout.toString().trim().startsWith("OK")) {
