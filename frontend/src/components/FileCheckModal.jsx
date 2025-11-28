@@ -191,11 +191,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
             {/* hiển thị range ngày chuẩn local, không Energy */}
             <p className="text-xs text-gray-500 mt-1">
               {checking
-                ? isXlsx
-                  ? progress < 40
-                    ? `Converting to CSV … ${Math.round(progress)}%`
-                    : `Reading CSV … ${Math.round(progress)}%`
-                  : `Reading CSV … ${Math.round(progress)}%`
+                ? `Reading log file… ${Math.round(progress)}%`
                 : ok
                 ? "Log parsed successfully"
                 : logStatus.msg || "Waiting..."}
@@ -223,7 +219,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 {checking
-                  ? "Checking PDF..."
+                  ? "Reading PVSyst file…"
                   : pvsystResult?.message || "Waiting..."}
               </p>
             </div>
