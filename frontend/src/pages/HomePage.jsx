@@ -75,7 +75,7 @@ export default function HomePage() {
       setProgressMessage("Reading log file…");
       setProgressValue(10);
       // Prefer parsedData (provided by FileCheckModal) to avoid double-parse.
-      let computeResult = parsedData?.log || parsedData || null;
+      let computeResult = parsedData?.log || null;
       if (!computeResult && logFile) {
         const fd = new FormData();
         fd.append("logfile", logFile);

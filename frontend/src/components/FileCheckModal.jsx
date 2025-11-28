@@ -273,7 +273,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
           <button
             onClick={() => onNext({
               log: logResult,
-              pvsyst: projectInfo,      // TRUYỀN ĐÚNG PVSYST DATA
+              pvsyst: projectInfo || null,
               pvsystOK: !!pvsystResult?.valid
             })}
             disabled={!canProceed || checking}

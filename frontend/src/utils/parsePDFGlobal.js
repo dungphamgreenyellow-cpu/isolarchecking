@@ -47,7 +47,20 @@ export async function parsePDFGlobal(file) {
       dc_ac_ratio: d.dc_ac_ratio ?? null,
       _raw: d,
     };
-    return normalized;
+    return {
+      success: true,
+      systemInfo: {
+        systemPowerDC_kWp: d.capacity_dc_kwp ?? null,
+        systemPowerAC_kW: d.capacity_ac_kw ?? null,
+      },
+      reportDate: d.cod_date || d.codDate || null,
+      pvArray: {
+        moduleModel: d.module_model || null,
+        inverterModel: d.inverter_model || null,
+      },
+      soilingLoss_percent: d.soiling_loss_percent ?? null,
+      gps: d.gps || {},
+    };
   } catch (e) {
     return null;
   }
