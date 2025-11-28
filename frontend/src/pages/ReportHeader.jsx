@@ -26,17 +26,14 @@ export default function ReportHeader({ data = {}, reportDate }) {
       : "—";
 
   // c) PV / INV
-  const pvModule =
-    data.pvModuleModel ||
-    data.moduleModel ||
-    data.module_name ||
-    "—";
-  const inverter =
-    data.inverterModel ||
-    data.invModel ||
-    data.inverter_name ||
-    "—";
-  const pvInvBox = `${pvModule || "—"} / ${inverter || "—"}`;
+  // Build PV/INV display from parser `pvArray` object (manufacturer, unit, count)
+  const pvArr = data.pvArray || {};
+  const pvDisplay = (pvArr.moduleManufacturer || pvArr.moduleUnitWp || pvArr.moduleCount)
+    ? `${pvArr.moduleManufacturer || ""} — ${pvArr.moduleUnitWp || ""}Wp × ${pvArr.moduleCount ?? ""} units`
+    : "—";
+  const invDisplay = (pvArr.inverterManufacturer || pvArr.inverterUnit_kW || pvArr.inverterCount)
+    ? `${pvArr.inverterManufacturer || ""} — ${pvArr.inverterUnit_kW || ""}kWac × ${pvArr.inverterCount ?? ""} units`
+    : "—";
 
   // d) COD
   const codRaw = data.cod_date || data.cod || null;
@@ -88,7 +85,13 @@ export default function ReportHeader({ data = {}, reportDate }) {
           </div>
           <div className="bg-white/10 border border-white/20 rounded-none px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">PV / INV</p>
-            <p className="font-medium mt-1 leading-snug whitespace-normal break-words" title={pvInvBox}>{pvInvBox}</p>
+              <div>
+                <div className="text-sm font-medium">PV:</div>
+                <div className="text-sm mb-1">{pvDisplay}</div>
+
+                <div className="text-sm font-medium mt-2">INV:</div>
+                <div className="text-sm">{invDisplay}</div>
+              </div>
           </div>
           <div className="bg-white/10 border border-white/20 rounded-none px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">COD</p>
