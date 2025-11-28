@@ -4,6 +4,6 @@ services:
     env: node
     plan: free
     rootDir: backend
-    buildCommand: npm install --omit=dev
+    buildCommand: pip install -r backend/requirements.txt && yarn install
     startCommand: node index.js
     autoDeploy: false
