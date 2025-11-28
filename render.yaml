@@ -2,10 +2,18 @@ services:
   - type: web
     name: isolarchecking-backend
     env: node
-    plan: free
     rootDir: backend
     buildCommand: |
       pip install -r backend/requirements.txt
       yarn install
     startCommand: node index.js
-    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+
+  - type: web
+    name: isolarchecking-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: yarn build
+    staticPublishPath: dist
