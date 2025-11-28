@@ -50,11 +50,26 @@ export default function ReportProjectInfo({ data }) {
         {/* PV / INV */}
         <div className="col-span-6 bg-[#2563EB]/25 rounded-xl p-3">
           <p className="text-sm flex items-center gap-1">🔧 PV / INV</p>
-          <p className="text-sm leading-snug mt-1 break-keep whitespace-nowrap overflow-hidden text-ellipsis">
-            {project.module || "JA Solar JAM72S30-545/MR"}{" "}
-            {project.inverter ||
-              "Huawei SUN2000-100KTL-M1-400Vac"}
-          </p>
+          {/* New display: manufacturer — unit × count (two lines) */}
+          {(() => {
+            const pv = project.pvArray || {};
+            const pvDisplay = pv.moduleManufacturer || pv.moduleUnitWp || pv.moduleCount
+              ? `${pv.moduleManufacturer || ""} — ${pv.moduleUnitWp || ""}Wp × ${pv.moduleCount ?? ""} units`.trim()
+              : null;
+            const invDisplay = pv.inverterManufacturer || pv.inverterUnit_kW || pv.inverterCount
+              ? `${pv.inverterManufacturer || ""} — ${pv.inverterUnit_kW || ""}kWac × ${pv.inverterCount ?? ""} units`.trim()
+              : null;
+
+            return (
+              <div>
+                <div className="text-sm font-medium">PV:</div>
+                <div className="text-sm mb-1">{pvDisplay || "-"}</div>
+
+                <div className="text-sm font-medium mt-2">INV:</div>
+                <div className="text-sm">{invDisplay || "-"}</div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </section>
