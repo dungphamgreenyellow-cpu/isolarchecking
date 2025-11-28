@@ -1,4 +1,4 @@
-import fs from "fs";
+const fs = require("fs");
 
 // Rewritten PVSyst PDF parser — multi-anchor strategy
 // Implements parsePVSystPDF(filePathOrBuffer) and returns structured JSON.
@@ -9,9 +9,14 @@ async function extractTextPages(input) {
   else if (typeof input === "string") buffer = await fs.promises.readFile(input);
   else throw new Error("Unsupported input to extractTextPages");
 
-  // pdf-parse primary
+  // pdf-parse primary (CommonJS require)
   try {
-    const pdfParse = await import("pdf-parse").then((m) => m.default || m).catch(() => null);
+    let pdfParse = null;
+    try {
+      pdfParse = require("pdf-parse");
+    } catch (e) {
+      pdfParse = null;
+    }
     if (typeof pdfParse === "function") {
       const { text } = await pdfParse(buffer);
       const pages = String(text || "").split(/\f/).map((p) => p.replace(/\s+/g, " ").trim()).filter(Boolean);
@@ -19,21 +24,29 @@ async function extractTextPages(input) {
       return [String(text || "").replace(/\s+/g, " ").trim()];
     }
   } catch (e) {
-    // fallback
+    // fallback to pdfjs-dist below
   }
 
   try {
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.js").then((m) => m.default || m);
-    const getDocument = pdfjs.getDocument || pdfjs.default?.getDocument;
-    const doc = await getDocument({ data: new Uint8Array(buffer) }).promise;
-    const pages = [];
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const content = await page.getTextContent();
-      const text = content.items.map((it) => it.str).join(" ");
-      pages.push(text.replace(/\s+/g, " ").trim());
+    let pdfjs = null;
+    try {
+      pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
+    } catch (e) {
+      pdfjs = null;
     }
-    return pages;
+    const getDocument = pdfjs && (pdfjs.getDocument || (pdfjs.default && pdfjs.default.getDocument));
+    if (typeof getDocument === "function") {
+      const doc = await getDocument({ data: new Uint8Array(buffer) }).promise;
+      const pages = [];
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        const text = content.items.map((it) => it.str).join(" ");
+        pages.push(text.replace(/\s+/g, " ").trim());
+      }
+      return pages;
+    }
+    return [buffer.toString("utf8").replace(/\s+/g, " ").trim()];
   } catch (err) {
     return [buffer.toString("utf8").replace(/\s+/g, " ").trim()];
   }
@@ -133,7 +146,7 @@ function parseMonthlyTable(sectionText) {
   return { monthly: monthly.length ? monthly : null, yearSummary: Object.keys(yearSummary).length ? yearSummary : null };
 }
 
-export async function parsePVSystPDF(filePathOrBuffer) {
+async function parsePVSystPdf(filePathOrBuffer) {
   try {
     const pages = await extractTextPages(filePathOrBuffer);
     let allLines = [];
@@ -249,4 +262,4 @@ export async function parsePVSystPDF(filePathOrBuffer) {
   }
 }
 
-export default parsePVSystPDF;
+module.exports = parsePVSystPdf;
