@@ -12,11 +12,12 @@ import { getBackendBaseUrl } from "../config";
 // Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
 // (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
 
-export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onNext, setProjectInfo }) {
+export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onClose, onNext, setProjectInfo }) {
   const [checking, setChecking] = useState(false);
   const [logResult, setLogResult] = useState(null); // raw parse payload (data.data)
   const [logStatus, setLogStatus] = useState({ ok: false, msg: "" }); // simplified status object
   const [pvsystResult, setPvsystResult] = useState(null);
+  const [irrResult, setIrrResult] = useState(null);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -148,6 +149,13 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
         }
       }
 
+      // Mark irradiance file presence (UI status only)
+      if (irrFile) {
+        setIrrResult({ valid: true, message: "Irradiance file noted" });
+      } else {
+        setIrrResult(null);
+      }
+
       setLogResult(logRes);
       setPvsystResult(pvRes);
       setChecking(false);
@@ -221,6 +229,33 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
                 {checking
                   ? "Reading PVSyst file…"
                   : pvsystResult?.message || "Waiting..."}
+              </p>
+            </div>
+          )}
+
+          {/* Irradiance File */}
+          {irrFile && (
+            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+              <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
+                <span className="truncate">☀️ Irradiation File: {irrFile?.name}</span>
+                <span>{checking ? "…" : irrResult?.valid ? "✅" : "❌"}</span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`${
+                    checking
+                      ? "bg-yellow-500 animate-pulse"
+                      : irrResult?.valid
+                      ? "bg-green-500"
+                      : "bg-red-500"
+                  } h-full`}
+                  style={{ width: checking ? "60%" : "100%" }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {checking
+                  ? "Reading irradiance file…"
+                  : irrResult?.message || "Waiting..."}
               </p>
             </div>
           )}

@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 // removed legacy api helpers; all calls use fetch/axios directly
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
+import { getDefaultValues } from "../hooks/useProjectParser";
 import { getBackendBaseUrl } from "../config";
 
 // Backend base URL (ensure correct Render domain fallback)
@@ -33,6 +34,7 @@ export default function HomePage() {
   const [pvsystFile, setPvsystFile] = useState(null);
   const [irrFile, setIrrFile] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [defaultValues, setDefaultValues] = useState({});
   const [projectData, setProjectData] = useState({});
   const [computeData, setComputeData] = useState(null);
   const [confirmData, setConfirmData] = useState(null);
@@ -72,15 +74,14 @@ export default function HomePage() {
       // Step 1: Reading log file
       setProgressMessage("Reading log file…");
       setProgressValue(10);
-      let computeResult = null;
-      if (logFile) {
+      // Prefer parsedData (provided by FileCheckModal) to avoid double-parse.
+      let computeResult = parsedData || null;
+      if (!computeResult && logFile) {
         const fd = new FormData();
         fd.append("logfile", logFile);
         const res = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
         const json = await res.json();
         computeResult = json.success ? json.data : null;
-      } else if (parsedData) {
-        computeResult = parsedData;
       }
       setProgressValue(33);
 
@@ -89,11 +90,16 @@ export default function HomePage() {
       setProgressValue(50);
       let pvsystInfo = null;
       if (pvsystFile) {
-        const fd2 = new FormData();
-        fd2.append("pvsystFile", pvsystFile);
-        const res2 = await fetch(`${backend}/analysis/parse-pvsyst`, { method: "POST", body: fd2 });
-        const j2 = await res2.json();
-        if (j2?.success) pvsystInfo = j2.data || j2;
+        // If the FileCheckModal already parsed PVSyst and set projectData, avoid re-parsing
+        if (parsedData?.pvsyst && !pvsystInfo) {
+          pvsystInfo = parsedData.pvsyst;
+        } else {
+          const fd2 = new FormData();
+          fd2.append("pvsystFile", pvsystFile);
+          const res2 = await fetch(`${backend}/analysis/parse-pvsyst`, { method: "POST", body: fd2 });
+          const j2 = await res2.json();
+          if (j2?.success) pvsystInfo = j2.data || j2;
+        }
       }
       setProgressValue(66);
 
@@ -112,6 +118,9 @@ export default function HomePage() {
       if (parsedData?.siteName) merged.siteName = parsedData.siteName;
       setComputeData(computeResult || null);
       setProjectData(merged);
+      // Build default values for the Confirm Modal and auto-open it
+      const defaults = getDefaultValues({ logData: computeResult || {}, pvsyst: pvsystInfo || {} });
+      setDefaultValues(defaults);
       setProgressValue(100);
       setProgressMessage("Done");
       setModalOpen(true);
@@ -242,13 +251,7 @@ export default function HomePage() {
       <ProjectConfirmModal
         open={modalOpen}
         initialData={projectData}
-        defaultValues={{
-          siteName: projectData?.siteName || "",
-          installed: projectData?.systemInfo?.systemPowerDC_kWp || projectData?.capacity || "",
-          cod: projectData?.reportDate || projectData?.cod_date || "",
-          gamma: 0.34,
-          degradation: 0.5,
-        }}
+        defaultValues={defaultValues}
         onConfirm={handleConfirm}
         onClose={() => setModalOpen(false)}
       />
