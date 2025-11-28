@@ -14,12 +14,23 @@ import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// In-memory progress holder (simple, per-process)
+let latestProgress = { p: 0 };
+
+// GET /analysis/progress — simple polling endpoint
+router.get("/progress", (req, res) => {
+	return res.json({ p: latestProgress.p });
+});
+
 // POST /analysis/compute (multer memoryStorage ONLY)
 router.post("/compute", upload.single("logfile"), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.json({ success: false, error: "No logfile uploaded" });
     }
+
+    // reset progress state for this compute cycle
+    latestProgress = { p: 0 };
 
     const t0 = performance.now();
     const originalname = (req.file.originalname || "").toLowerCase();
@@ -32,6 +43,7 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
     const inputPath = path.join(tmpDir, `${baseName}_${Date.now()}${ext}`);
 
     await fs.promises.writeFile(inputPath, req.file.buffer);
+    latestProgress.p = 10;
 
     let csvPath = inputPath;
 
@@ -39,6 +51,7 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
       const outPath = path.join(tmpDir, `${baseName}_${Date.now()}.csv`);
       await convertXlsxToCsv(inputPath, outPath);
       csvPath = outPath;
+      latestProgress.p = 40;
     } else if (/\.xml$/i.test(originalname)) {
       const csv = xmlToCsv(req.file.buffer);
       const outPath = path.join(tmpDir, `${baseName}_${Date.now()}.csv`);
@@ -48,7 +61,9 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
       return res.json({ success: false, error: "Invalid file type" });
     }
 
-    const result = await parseFusionSolarCsv(csvPath);
+    const result = await parseFusionSolarCsv(csvPath, (p) => {
+      latestProgress.p = p;
+    });
     const ms = performance.now() - t0;
 
     try {
@@ -60,7 +75,8 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
       } catch {}
     }
 
-    return res.json({ success: true, data: result, parse_ms: ms });
+    latestProgress.p = 100;
+    return res.json({ success: true, progress: 100, data: result, parse_ms: ms });
 
   } catch (err) {
     console.error("Compute Error:", err);

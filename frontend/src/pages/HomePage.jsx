@@ -81,10 +81,11 @@ export default function HomePage() {
 
     try {
       const merged = {
-        ...parsedData,
         ...projectData,
-        siteName: parsedData?.siteName || projectData?.siteName || ""
+        ...parsedData,
       };
+
+      merged.siteName = parsedData?.siteName || projectData?.siteName;
 
       setComputeData(parsedData);
       setProjectData(merged);

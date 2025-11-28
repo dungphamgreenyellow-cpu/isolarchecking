@@ -18,13 +18,24 @@ function normalizeInverter(raw) {
 	return cleaned ? `INV-${cleaned}` : null;
 }
 
-export function parseFusionSolarCsv(filePath) {
+
+export function parseFusionSolarCsv(filePath, onProgress) {
 	return new Promise((resolve, reject) => {
 		const invDayMap = {};
 		let parsedRecordsCount = 0;
 		let siteName = null;
 		let headers = null;
 		let headerRowIndex = 0;
+		let totalLines = 0;
+		let processedLines = 0;
+
+		// Pre-count total lines for progress estimation
+		try {
+			const stat = fs.readFileSync(filePath, "utf8");
+			totalLines = stat.split("\n").length || 0;
+		} catch {
+			totalLines = 0;
+		}
 
 		const parser = parse({
 			bom: false,
@@ -35,6 +46,12 @@ export function parseFusionSolarCsv(filePath) {
 		parser.on("readable", () => {
 			let record;
 			while ((record = parser.read()) !== null) {
+				processedLines += 1;
+				if (onProgress && totalLines > 0) {
+					const frac = processedLines / totalLines;
+					const pct = Math.max(40, Math.min(100, Math.floor(40 + frac * 60)));
+					onProgress(pct);
+				}
 				if (!headers) {
 					headers = record.map((v) => (v ? String(v).trim() : ""));
 					headerRowIndex += 1;
@@ -52,14 +69,18 @@ export function parseFusionSolarCsv(filePath) {
 				let yieldKey = null;
 				let invKey = null;
 				let siteKey = null;
+				let siteNameCol = null;
 
 				if (headers && headers.length) {
-					headers.forEach((k) => {
+					headers.forEach((k, idx) => {
 						const l = k.toLowerCase();
 						if (!startKey && l.includes("start") && l.includes("time")) startKey = k;
 						if (!yieldKey && l.includes("total") && l.includes("yield")) yieldKey = k;
 						if (!invKey && (l.includes("manageobject") || l.includes("inverter") || l.includes("device name"))) invKey = k;
 						if (!siteKey && (l.includes("site name") || l.includes("plant name"))) siteKey = k;
+						if (siteNameCol === null && (l.includes("plant") || l.includes("station") || l.includes("site"))) {
+							siteNameCol = idx;
+						}
 					});
 				}
 
@@ -73,6 +94,10 @@ export function parseFusionSolarCsv(filePath) {
 				if (!rawT || !rawE || !rawInv) continue;
 
 				if (!siteName && siteKey && row[siteKey]) siteName = String(row[siteKey]).trim();
+				if (siteNameCol !== null && siteName === null) {
+					const v = record[siteNameCol];
+					if (v && String(v).trim().length > 0) siteName = String(v).trim();
+				}
 
 				const day = normalizeDate(rawT);
 				if (!day) continue;
@@ -99,6 +124,7 @@ export function parseFusionSolarCsv(filePath) {
 		});
 
 		parser.on("end", () => {
+			if (onProgress) onProgress(100);
 			const daily = {};
 			for (const d of Object.keys(invDayMap)) {
 				let sum = 0;

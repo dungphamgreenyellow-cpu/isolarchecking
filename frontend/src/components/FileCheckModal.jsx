@@ -17,11 +17,13 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
   const [logResult, setLogResult] = useState(null); // raw parse payload (data.data)
   const [logStatus, setLogStatus] = useState({ ok: false, msg: "" }); // simplified status object
   const [pvsystResult, setPvsystResult] = useState(null);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
       setChecking(true);
+      setProgress(0);
       let logRes = null, pvRes = null;
       try {
         if (logFile) {
@@ -30,6 +32,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           const formData = new FormData();
           // Always send raw file (no XLSX→CSV conversion on FE)
           formData.append("logfile", logFile);
+
           const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
             let lastErr = null;
             for (let i = 0; i < retries; i++) {
@@ -45,7 +48,33 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
             throw lastErr || new Error("Network error");
           };
 
-          const res = await fetchWithRetry(`${backendURL}/analysis/compute`, { method: "POST", body: formData });
+          // Start compute request (no upload progress available via fetch)
+          const computePromise = fetchWithRetry(`${backendURL}/analysis/compute`, { method: "POST", body: formData });
+
+          // Start polling backend progress every 400ms in parallel
+          let stopPolling = false;
+          const poll = async () => {
+            while (!stopPolling) {
+              try {
+                const pr = await fetch(`${backendURL}/analysis/progress`);
+                const pj = await pr.json();
+                if (typeof pj.p === "number") {
+                  setProgress(pj.p);
+                  if (pj.p >= 100) {
+                    break;
+                  }
+                }
+              } catch {
+                // ignore polling errors
+              }
+              await new Promise((r) => setTimeout(r, 400));
+            }
+          };
+
+          poll();
+
+          const res = await computePromise;
+          stopPolling = true;
           let data = null;
           try {
             data = await res.json();
@@ -55,6 +84,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
           if (data?.success) {
             // Support both shapes: { success, data: {...} } or flat { success, ... }
             const payload = data.data && typeof data.data === "object" ? data.data : data;
+            setProgress(100);
             setLogStatus({ ok: true, msg: "FusionSolar log parsed successfully" });
             logRes = { ...payload, success: true, parse_ms: data.parse_ms };
             // Populate Site Name if present
@@ -129,6 +159,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
   // New canProceed logic based on logStatus.ok
   const ok = logStatus.ok;
   const canProceed = logStatus.ok;
+  const isXlsx = logFile && /\.xlsx$/i.test(logFile.name || "");
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -153,14 +184,18 @@ export default function FileCheckModal({ open, logFile, pvsystFile, onClose, onN
                     ? "bg-green-500"
                     : "bg-red-500"
                 } h-full`}
-                style={{ width: checking ? "70%" : "100%" }}
+                style={{ width: `${Math.min(100, Math.max(0, progress || (checking ? 10 : 0)))}%` }}
               />
             </div>
 
             {/* hiển thị range ngày chuẩn local, không Energy */}
             <p className="text-xs text-gray-500 mt-1">
               {checking
-                ? "Parsing log..."
+                ? isXlsx
+                  ? progress < 40
+                    ? `Converting to CSV … ${Math.round(progress)}%`
+                    : `Reading CSV … ${Math.round(progress)}%`
+                  : `Reading CSV … ${Math.round(progress)}%`
                 : ok
                 ? "Log parsed successfully"
                 : logStatus.msg || "Waiting..."}
