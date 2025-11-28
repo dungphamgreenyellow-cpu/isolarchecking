@@ -13,8 +13,17 @@ export function convertXlsxToCsv(inputPath, outputPath) {
 				if (err) {
 					return reject(new Error(stderr || err.message));
 				}
+				// Ignore openpyxl warnings in stderr
 				if (stderr && stderr.trim()) {
-					return reject(new Error(stderr.trim()));
+					const cleaned = stderr
+						.split("\n")
+						.filter(line => !line.includes("UserWarning"))
+						.join("\n")
+						.trim();
+
+					if (cleaned.length > 0) {
+						return reject(new Error(cleaned));
+					}
 				}
 				if (!stdout.toString().trim().startsWith("OK")) {
 					return reject(new Error(`Unexpected converter output: ${stdout.toString()}`));
