@@ -4,7 +4,7 @@ services:
     env: node
     rootDir: backend
     buildCommand: |
-      pip install -r backend/requirements.txt
+      pip install -r requirements.txt
       yarn install
     startCommand: node index.js
     envVars:
