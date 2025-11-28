@@ -3,10 +3,11 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { Readable } from "stream";
-import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
-import { xlsxStreamToCsv } from "../compute/xlsxStreamToCsv.js";
 import { xmlToCsv } from "../compute/xmlToCsv.js";
+import { convertXlsxToCsv } from "../utils/convertXlsxToCsv.js";
+import { parseFusionSolarCsv } from "../services/fusionSolarCsvParser.js";
 import { computeRealPerformanceRatio } from "../compute/realPRCalculator.js";
 import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 
@@ -23,22 +24,42 @@ router.post("/compute", upload.single("logfile"), async (req, res) => {
     const t0 = performance.now();
     const originalname = (req.file.originalname || "").toLowerCase();
 
-    let result;
+    const tmpDir = path.join(os.tmpdir(), "isolarchecking");
+    await fs.promises.mkdir(tmpDir, { recursive: true });
+
+    const ext = path.extname(originalname) || "";
+    const baseName = path.basename(originalname, ext).replace(/[^a-z0-9_-]/gi, "_");
+    const inputPath = path.join(tmpDir, `${baseName}_${Date.now()}${ext}`);
+
+    await fs.promises.writeFile(inputPath, req.file.buffer);
+
+    let csvPath = inputPath;
+
     if (/\.xlsx$/i.test(originalname)) {
-      const csv = xlsxStreamToCsv(req.file.buffer);
-      const csvStream = Readable.from(csv);
-      result = await streamParseAndCompute(csvStream);
+      const outPath = path.join(tmpDir, `${baseName}_${Date.now()}.csv`);
+      await convertXlsxToCsv(inputPath, outPath);
+      csvPath = outPath;
     } else if (/\.xml$/i.test(originalname)) {
       const csv = xmlToCsv(req.file.buffer);
-      const csvStream = Readable.from(csv);
-      result = await streamParseAndCompute(csvStream);
-    } else if (/\.csv$/i.test(originalname)) {
-      result = await streamParseAndCompute(req.file.buffer);
-    } else {
+      const outPath = path.join(tmpDir, `${baseName}_${Date.now()}.csv`);
+      await fs.promises.writeFile(outPath, csv, "utf8");
+      csvPath = outPath;
+    } else if (!/\.csv$/i.test(originalname)) {
       return res.json({ success: false, error: "Invalid file type" });
     }
+
+    const result = await parseFusionSolarCsv(csvPath);
     const ms = performance.now() - t0;
-    // Wrap in a stable shape so FE can rely on data field
+
+    try {
+      await fs.promises.unlink(inputPath);
+    } catch {}
+    if (csvPath !== inputPath) {
+      try {
+        await fs.promises.unlink(csvPath);
+      } catch {}
+    }
+
     return res.json({ success: true, data: result, parse_ms: ms });
 
   } catch (err) {
