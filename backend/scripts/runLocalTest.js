@@ -3,7 +3,7 @@
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-const parsePVSystPdf = require("../compute/parsePVSyst");
+import { parsePVSystPDF } from "../compute/parsePVSyst.js";
 import { streamParseAndCompute } from "../compute/fusionSolarParser.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,7 +28,7 @@ async function main() {
   const computeData = await streamParseAndCompute(logBuf);
 
   // 2) Parse PVSyst PDF
-  const pvsystInfo = await parsePVSystPdf(pdfPath);
+  const pvsystInfo = await parsePVSystPDF(pdfPath);
 
   // 3) Normalize like parsePDFGlobal does (synonyms)
   const d = pvsystInfo || {};
