@@ -271,7 +271,11 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
             Cancel
           </button>
           <button
-            onClick={() => onNext({ ...logResult, pvsystOK: !!pvsystResult?.valid })}
+            onClick={() => onNext({
+              log: logResult,
+              pvsyst: projectInfo,      // TRUYỀN ĐÚNG PVSYST DATA
+              pvsystOK: !!pvsystResult?.valid
+            })}
             disabled={!canProceed || checking}
             className={`px-5 py-2 rounded-lg font-medium text-white shadow-md transition-all ${
               canProceed && !checking

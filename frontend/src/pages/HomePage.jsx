@@ -75,7 +75,7 @@ export default function HomePage() {
       setProgressMessage("Reading log file…");
       setProgressValue(10);
       // Prefer parsedData (provided by FileCheckModal) to avoid double-parse.
-      let computeResult = parsedData || null;
+      let computeResult = parsedData?.log || parsedData || null;
       if (!computeResult && logFile) {
         const fd = new FormData();
         fd.append("logfile", logFile);
@@ -88,7 +88,7 @@ export default function HomePage() {
       // Step 2: Reading PVSyst file
       setProgressMessage("Reading PVSyst file…");
       setProgressValue(50);
-      let pvsystInfo = null;
+      let pvsystInfo = parsedData?.pvsyst || null;
       if (pvsystFile) {
         // If the FileCheckModal already parsed PVSyst and set projectData, avoid re-parsing
         if (parsedData?.pvsyst && !pvsystInfo) {
