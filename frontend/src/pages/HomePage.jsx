@@ -38,6 +38,8 @@ export default function HomePage() {
   const [confirmData, setConfirmData] = useState(null);
   const [fileCheckOpen, setFileCheckOpen] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
+  const [progressValue, setProgressValue] = useState(0);
   const [error, setError] = useState(null);
   const [parsedRecords, setParsedRecords] = useState(null);
 
@@ -45,23 +47,10 @@ export default function HomePage() {
 
   // STEP 4 — AUTO OPEN CONFIRM MODAL WHEN PARSE SUCCESS
   const handleStartAnalyze = async () => {
+    // kept for backward compatibility (not used by UI)
     setChecking(true);
-    const fd = new FormData();
-    fd.append("logfile", logFile);
-
     try {
-  const res = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!json.success || json.data?.note) {
-        setChecking(false);
-        return setError(json.data?.note || "Parsing failed.");
-      }
-
-      setProjectData(json.data);
-      setModalOpen(true); // ✅ AUTO NEXT (no click)
-      setError(null);
-    } catch (e) {
-      setError("Network error.");
+      // noop: prefer FileCheckModal flow which triggers handleFileCheckNext
     } finally {
       setChecking(false);
     }
@@ -76,24 +65,59 @@ export default function HomePage() {
   };
 
   const handleFileCheckNext = async (parsedData) => {
+    // Unified 3-step reading status and then auto-open Confirm Modal
     setFileCheckOpen(false);
     setChecking(true);
-
     try {
-      const merged = {
-        ...projectData,
-        ...parsedData,
-      };
+      // Step 1: Reading log file
+      setProgressMessage("Reading log file…");
+      setProgressValue(10);
+      let computeResult = null;
+      if (logFile) {
+        const fd = new FormData();
+        fd.append("logfile", logFile);
+        const res = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
+        const json = await res.json();
+        computeResult = json.success ? json.data : null;
+      } else if (parsedData) {
+        computeResult = parsedData;
+      }
+      setProgressValue(33);
 
-      merged.siteName = parsedData?.siteName || projectData?.siteName;
+      // Step 2: Reading PVSyst file
+      setProgressMessage("Reading PVSyst file…");
+      setProgressValue(50);
+      let pvsystInfo = null;
+      if (pvsystFile) {
+        const fd2 = new FormData();
+        fd2.append("pvsystFile", pvsystFile);
+        const res2 = await fetch(`${backend}/analysis/parse-pvsyst`, { method: "POST", body: fd2 });
+        const j2 = await res2.json();
+        if (j2?.success) pvsystInfo = j2.data || j2;
+      }
+      setProgressValue(66);
 
-      setComputeData(parsedData);
+      // Step 3: Reading irradiance file (best-effort local status)
+      setProgressMessage("Reading irradiance file…");
+      setProgressValue(80);
+      let irrInfo = null;
+      if (irrFile) {
+        // No dedicated backend endpoint for irradiance in this branch; mark as read
+        irrInfo = { filename: irrFile.name };
+      }
+      setProgressValue(95);
+
+      // Merge results and open Confirm Modal
+      const merged = Object.assign({}, projectData, computeResult || {}, pvsystInfo || {});
+      if (parsedData?.siteName) merged.siteName = parsedData.siteName;
+      setComputeData(computeResult || null);
       setProjectData(merged);
+      setProgressValue(100);
+      setProgressMessage("Done");
       setModalOpen(true);
     } catch (err) {
-      setProjectData(parsedData || {});
-      setComputeData(parsedData || null);
-      setModalOpen(true);
+      console.error(err);
+      setError(err?.message || String(err));
     } finally {
       setChecking(false);
     }
@@ -218,6 +242,13 @@ export default function HomePage() {
       <ProjectConfirmModal
         open={modalOpen}
         initialData={projectData}
+        defaultValues={{
+          siteName: projectData?.siteName || "",
+          installed: projectData?.systemInfo?.systemPowerDC_kWp || projectData?.capacity || "",
+          cod: projectData?.reportDate || projectData?.cod_date || "",
+          gamma: 0.34,
+          degradation: 0.5,
+        }}
         onConfirm={handleConfirm}
         onClose={() => setModalOpen(false)}
       />

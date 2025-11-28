@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { normalizeDateString, formatDateDisplay } from "../utils/date";
 
-export default function ProjectConfirmModal({ open, initialData = {}, onConfirm, onClose }) {
+export default function ProjectConfirmModal({ open, initialData = {}, defaultValues = {}, onConfirm, onClose }) {
   const [form, setForm] = useState(initialData || {});
 
   useEffect(() => {
@@ -19,6 +19,19 @@ export default function ProjectConfirmModal({ open, initialData = {}, onConfirm,
       };
     });
   }, [open, initialData]);
+
+  // Auto-fill from provided defaultValues (e.g., from parser results)
+  useEffect(() => {
+    if (!defaultValues) return;
+    setForm((f) => ({
+      ...f,
+      siteName: defaultValues.siteName || f.siteName || "",
+      installedCapacity: defaultValues.installed || f.installedCapacity || "",
+      codDate: defaultValues.cod || f.codDate || "",
+      gamma: defaultValues.gamma ?? f.gamma ?? "0.34",
+      degradation: defaultValues.degradation ?? f.degradation ?? "0.5",
+    }));
+  }, [defaultValues]);
 
   if (!open) return null;
 
