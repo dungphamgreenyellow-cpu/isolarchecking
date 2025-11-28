@@ -1,33 +1,19 @@
 // src/components/ProjectConfirmModal.jsx — sync initialData to form
 import React, { useEffect, useState } from "react";
+import { normalizeDateString, formatDateDisplay } from "../utils/date";
 
 export default function ProjectConfirmModal({ open, initialData = {}, onConfirm, onClose }) {
   const [form, setForm] = useState(initialData || {});
 
   useEffect(() => {
     if (!open) return;
-    const normalizeDate = (val) => {
-      if (!val) return "";
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
-        const [mm, dd, yyyy] = val.split("/");
-        return `${yyyy}-${mm}-${dd}`;
-      }
-      if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
-        const [dd, mm, yyyy] = val.split(".");
-        return `${yyyy}-${mm}-${dd}`;
-      }
-      if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
-        return val.replaceAll("/", "-");
-      }
-      return val;
-    };
     setForm((f) => {
       const dc = initialData?.capacityDCkWp ?? initialData?.capacity_dc_kwp ?? f.capacityDCkWp;
       const codRaw = initialData?.codDate || initialData?.cod || initialData?.cod_date || f.codDate || "";
       return {
         siteName: initialData?.siteName || f.siteName || "",
         installedCapacity: initialData?.installedCapacity || (dc != null ? `${dc}` : f.installedCapacity || ""),
-        codDate: normalizeDate(codRaw),
+        codDate: normalizeDateString(codRaw),
         gamma: f.gamma || "0.34",
         degradation: f.degradation || "0.5",
       };

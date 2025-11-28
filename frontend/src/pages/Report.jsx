@@ -11,6 +11,7 @@ import { useLocation } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { getMonthlyGHI } from "../data/ghiBaseline";
 import { getBackendBaseUrl } from "../config";
+import { normalizeDateString, formatDateDisplay } from "../utils/date";
 
 function fmtMonthRange(start, end) {
   if (!start || !end) return "—";
@@ -22,13 +23,7 @@ function fmtMonthRange(start, end) {
     e.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
   );
 }
-function todayStr() {
-  return new Date().toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
+// Use shared formatter for consistency
 
 const backend = getBackendBaseUrl();
 
@@ -44,7 +39,7 @@ export default function Report() {
   const [dailyRPR, setDailyRPR] = React.useState([]);
   const [loadingPR, setLoadingPR] = React.useState(false);
   const [periodText, setPeriodText] = React.useState("—");
-  const [generatedText, setGeneratedText] = React.useState(todayStr());
+  const [generatedText, setGeneratedText] = React.useState(formatDateDisplay(new Date()));
   const [totalIrr, setTotalIrr] = React.useState(0);
 
   if (!projectData && !confirmData && !computeData)
@@ -85,7 +80,7 @@ export default function Report() {
         }
         const baselineGHI = getMonthlyGHI(gpsCountry || computeData?.gpsCountry || "Vietnam", month) / 30;
         setTotalIrr(Math.round(baselineGHI * reportDays));
-        setGeneratedText(todayStr());
+        setGeneratedText(formatDateDisplay(new Date()));
       } catch (err) {
         setPeriodText("—");
       }
