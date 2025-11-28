@@ -1,5 +1,5 @@
 import fs from "fs";
-import csv from "csv-parse";
+import { parse } from "csv-parse";
 
 function normalizeDate(value) {
 	if (!value) return null;
@@ -26,9 +26,10 @@ export function parseFusionSolarCsv(filePath) {
 		let headers = null;
 		let headerRowIndex = 0;
 
-		const parser = csv.parse({
-			bom: true,
+		const parser = parse({
+			bom: false,
 			relax_column_count: true,
+			trim: true,
 		});
 
 		parser.on("readable", () => {
