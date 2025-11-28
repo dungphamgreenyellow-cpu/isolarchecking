@@ -1,55 +1,71 @@
 import React, { useState } from "react";
 
-// Accept parsed values directly (gps, pvModel, inverterModel, firstDay, lastDay)
-export default function ReportHeader(props) {
-  const {
-    siteName,
-    installedCapacity,
-    codDate,
-    gps,
-    pvModel,
-    inverterModel,
-    firstDay,
-    lastDay,
-    reportDate,
-  } = props;
-
-  const [generatedAt] = useState(formatDate(new Date()));
+// Accept a single project/report data object
+export default function ReportHeader({ data = {}, reportDate }) {
+  const [generatedAt] = useState(formatDateDisplay(new Date()));
   const repDay = reportDate || generatedAt;
 
-  const periodBox = firstDay && lastDay ? `${firstDay} → ${lastDay}` : "—";
-  const pvInvBox = `${pvModel || "—"} / ${inverterModel || "—"}`;
+  // a) Site Name
+  const siteName =
+    data.siteName ||
+    data.pvSiteName ||
+    data.projectName ||
+    "—";
+
+  // b) Installed Capacity (kWp)
+  const installedCapacityRaw =
+    data.installedCapacityKw ||
+    data.installed_capacity_kWp ||
+    data.dcCapacity ||
+    data.capacity ||
+    null;
+  const installedCapacity =
+    installedCapacityRaw != null && installedCapacityRaw !== ""
+      ? `${installedCapacityRaw} kWp`
+      : "—";
+
+  // c) PV / INV
+  const pvModule =
+    data.pvModuleModel ||
+    data.moduleModel ||
+    data.module_name ||
+    "—";
+  const inverter =
+    data.inverterModel ||
+    data.invModel ||
+    data.inverter_name ||
+    "—";
+  const pvInvBox = `${pvModule || "—"} / ${inverter || "—"}`;
+
+  // d) COD
+  const codRaw = data.cod_date || data.cod || null;
+  const codDate = codRaw ? normalizeDateString(codRaw) : "—";
+
+  // e) GPS
+  const gps =
+    data.gps ||
+    (data.latitude && data.longitude
+      ? `${data.latitude}, ${data.longitude}`
+      : null);
+
+  // f) Period (from log)
+  const firstDay = data.firstDay || data.logFirstDay;
+  const lastDay = data.lastDay || data.logLastDay;
+  let periodBox = "Period: —";
+  if (firstDay && lastDay) {
+    if (firstDay === lastDay) {
+      periodBox = `Period: ${formatDateLabel(firstDay)}`;
+    } else {
+      periodBox = `Period: ${formatDateLabel(firstDay)} → ${formatDateLabel(lastDay)}`;
+    }
+  }
 
   // Bỏ parse PVSyst ở FE — dữ liệu sẽ được backend xử lý khi cần.
 
   // Removed XLSX-based Excel parsing — backend handles log parsing
 
   /** ========== HELPER FUNCTIONS ========== **/
-  function normalizeText(t) {
-    return t.replace(/\s+/g, " ").replace(/–/g, "-").replace(/°/g, "° ").trim();
-  }
-  function clean(s) {
-    return String(s || "").replace(/\s{2,}/g, " ").replace(/\s*×\s*/g, " × ").trim();
-  }
-  function normalizeDate(txt) {
-    if (!txt || txt === "—") return "—";
-    txt = txt.replace(/\./g, "/").replace(/\-/g, "/").trim();
-    const dmy = txt.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
-    if (dmy) {
-      const [_, d, m, y] = dmy;
-      const yyyy = y.length === 2 ? "20" + y : y;
-      const date = new Date(`${yyyy}-${m}-${d}`);
-      return formatDate(date);
-    }
-    return txt;
-  }
-  // Removed helpers used only by Excel parsing
-  function formatDate(d) {
-    return `${d.getDate().toString().padStart(2, "0")} ${[
-      "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
-    ][d.getMonth()]} ${d.getFullYear()}`;
-  }
-  // Removed old formatPeriod (unused after direct firstDay/lastDay display)
+  // date formatting helpers
 
   /** ========== UI RENDER ========== **/
   return (
@@ -60,14 +76,14 @@ export default function ReportHeader(props) {
             <p className="text-xl font-semibold text-white mt-1 ml-1 truncate" title={siteName}>{siteName || "—"}</p>
           </div>
           <div className="text-right text-xs md:text-sm text-white/80 leading-5">
-            <p>Period: <span className="font-medium text-white">{periodBox}</span></p>
+            <p><span className="font-medium text-white">{periodBox}</span></p>
             <p>Report Day: <span className="font-medium text-white">{repDay}</span></p>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 text-sm">
           <div className="bg-white/10 border border-white/20 rounded-none px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">Installed Capacity</p>
-            <p className="font-semibold mt-1">{installedCapacity ? `${installedCapacity} kWp` : "—"}</p>
+            <p className="font-semibold mt-1">{installedCapacity}</p>
           </div>
           <div className="bg-white/10 border border-white/20 rounded-none px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">PV / INV</p>
@@ -75,7 +91,7 @@ export default function ReportHeader(props) {
           </div>
           <div className="bg-white/10 border border-white/20 rounded-none px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">COD</p>
-            <p className="font-semibold mt-1">{codDate || "—"}</p>
+            <p className="font-semibold mt-1">{codDate}</p>
           </div>
           <div className="bg-white/10 border border-white/20 rounded-none px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-white/70">GPS</p>

@@ -161,14 +161,16 @@ export default function Report() {
     <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
       <div className="w-full max-w-[794px] mx-auto">
         <ReportHeader
-          siteName={projectData?.siteName}
-          installedCapacity={projectData?.capacity_dc_kwp}
-          codDate={projectData?.codDate}
-          gps={projectData?.gps}
-          pvModel={projectData?.pvModel}
-          inverterModel={projectData?.inverterModel}
-          firstDay={projectData?.firstDay}
-          lastDay={projectData?.lastDay}
+          data={{
+            ...projectData,
+            firstDay: projectData?.firstDay || computeData?.firstDay,
+            lastDay: projectData?.lastDay || computeData?.lastDay,
+            siteName:
+              projectData?.siteName ||
+              computeData?.siteName ||
+              rprData?.siteName ||
+              proj?.siteName,
+          }}
         />
         {/* PROJECT INFO removed as requested */}
       {/* SUMMARY & CHART */}
