@@ -3,8 +3,12 @@
 // { siteName, gps: {lat, lon}, capacity_dc_kwp, capacity_ac_kw, module_model, inverter_model, tilt_deg, azimuth_deg, soiling_loss_percent, dc_ac_ratio, _raw }
 
 import { getBackendBaseUrl } from "../config";
+// Adding debug logs to trace request and response flow
+import debug from 'debug';
+const log = debug('parsePDFGlobal');
 
 export async function parsePDFGlobal(file) {
+  log('Preparing to send file to backend for parsing');
   const backendURL = getBackendBaseUrl();
   const fd = new FormData();
   // Backend expects 'pvsystFile' for PVSyst PDF
@@ -15,9 +19,18 @@ export async function parsePDFGlobal(file) {
       method: "POST",
       body: fd,
     });
+    log('Received response from backend');
+
     const json = await res.json().catch(() => null);
-    if (!json?.success) return null;
+    log('Parsed JSON response:', json);
+
+    if (!json?.success) {
+      log('Parsing failed or backend returned an error');
+      return null;
+    }
+
     const d = json.data || {};
+    log('Normalized data:', d);
 
     const lat = d?.gps?.lat ?? d?.latitude ?? null;
     const lon = d?.gps?.lon ?? d?.longitude ?? null;
@@ -47,6 +60,8 @@ export async function parsePDFGlobal(file) {
       dc_ac_ratio: d.dc_ac_ratio ?? null,
       _raw: d,
     };
+
+    log('Final normalized output:', normalized);
     return {
       success: true,
       systemInfo: {
@@ -62,6 +77,7 @@ export async function parsePDFGlobal(file) {
       gps: d.gps || {},
     };
   } catch (e) {
+    log('Error during parsing or backend communication:', e);
     return null;
   }
 }

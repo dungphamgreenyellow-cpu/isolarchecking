@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { formatDateDisplay, normalizeDateString } from "../utils/date";
 
-// Accept a single project/report data object
 export default function ReportHeader({ data = {}, reportDate }) {
   const [generatedAt] = useState(formatDateDisplay(new Date()));
   const repDay = reportDate || generatedAt;
