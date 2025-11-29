@@ -7,12 +7,18 @@
 import React, { useEffect, useState } from "react";
 import { parsePDFGlobal } from "../utils/parsePDFGlobal";
 import { getBackendBaseUrl } from "../config";
+import debug from 'debug';
+
 // XLSX→CSV conversion removed — backend now handles XLSX directly
 
 // Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
 // (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
 
+const log = debug('FileCheckModal');
+
 export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onClose, onNext, setProjectInfo }) {
+  log('FileCheckModal initialized with props:', { open, logFile, pvsystFile, irrFile });
+
   const [checking, setChecking] = useState(false);
   const [logResult, setLogResult] = useState(null); // raw parse payload (data.data)
   const [logStatus, setLogStatus] = useState({ ok: false, msg: "" }); // simplified status object
@@ -22,16 +28,18 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
 
   useEffect(() => {
     if (!open) return;
+    log('Modal opened, starting file checks');
+
     (async () => {
       setChecking(true);
       setProgress(0);
       let logRes = null, pvRes = null;
+
       try {
         if (logFile) {
-          const backendURL = getBackendBaseUrl(); // MUST be defined in .env for Render
-          // backendURL must be defined in production; warn removed for release build
+          log('Processing log file:', logFile.name);
+          const backendURL = getBackendBaseUrl();
           const formData = new FormData();
-          // Always send raw file (no XLSX→CSV conversion on FE)
           formData.append("logfile", logFile);
 
           const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
@@ -42,6 +50,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
                 return r;
               } catch (e) {
                 lastErr = e;
+                log('Retrying fetch due to error:', e);
                 const d = delays[i] || 1000;
                 await new Promise((res) => setTimeout(res, d));
               }
@@ -49,24 +58,23 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
             throw lastErr || new Error("Network error");
           };
 
-          // Start compute request (no upload progress available via fetch)
           const computePromise = fetchWithRetry(`${backendURL}/analysis/compute`, { method: "POST", body: formData });
 
-          // Start polling backend progress every 400ms in parallel
           let stopPolling = false;
           const poll = async () => {
             while (!stopPolling) {
               try {
                 const pr = await fetch(`${backendURL}/analysis/progress`);
                 const pj = await pr.json();
+                log('Polling progress:', pj);
                 if (typeof pj.p === "number") {
                   setProgress(pj.p);
                   if (pj.p >= 100) {
                     break;
                   }
                 }
-              } catch {
-                // ignore polling errors
+              } catch (pollErr) {
+                log('Polling error:', pollErr);
               }
               await new Promise((r) => setTimeout(r, 400));
             }
@@ -79,16 +87,17 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
           let data = null;
           try {
             data = await res.json();
+            log('Log file response:', data);
           } catch (jsonErr) {
+            log('Error parsing JSON response:', jsonErr);
             setLogStatus({ ok: false, msg: "Invalid JSON response" });
           }
+
           if (data?.success) {
-            // Support both shapes: { success, data: {...} } or flat { success, ... }
             const payload = data.data && typeof data.data === "object" ? data.data : data;
             setProgress(100);
             setLogStatus({ ok: true, msg: "FusionSolar log parsed successfully" });
             logRes = { ...payload, success: true, parse_ms: data.parse_ms };
-            // Populate Site Name if present
             const siteName = payload?.siteName;
             if (siteName && setProjectInfo) {
               setProjectInfo((prev) => ({ ...prev, siteName }));
@@ -99,40 +108,37 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
           }
         }
       } catch (err) {
+        log('Error processing log file:', err);
         setLogStatus({ ok: false, msg: "Server not reachable. Please check backend URL or CORS." });
         logRes = { success: false, message: "Server not reachable. Please check backend URL or CORS." };
       }
 
       if (pvsystFile) {
+        log('Processing PVSyst file:', pvsystFile.name);
         const ok = /\.pdf$/i.test(pvsystFile.name || "");
         if (ok) {
           const pdfInfo = await parsePDFGlobal(pvsystFile);
+          log('PVSyst file parsed info:', pdfInfo);
           if (pdfInfo) {
-            // Auto-fill Installed Capacity and COD Date if available from PDF
             const overrides = {};
-            // Installed = DC kWp
             if (pdfInfo?.capacity_dc_kwp != null) {
               overrides.installed = `${pdfInfo.capacity_dc_kwp} kWp`;
               overrides.capacityDCkWp = String(pdfInfo.capacity_dc_kwp);
             }
-            // Normalize COD date to ISO (YYYY-MM-DD) for <input type="date">
             const toISO = (val) => {
               if (!val) return "";
-              // MM/DD/YYYY -> YYYY-MM-DD
               if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
                 const [mm, dd, yyyy] = val.split("/");
                 return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
               }
-              // 21.12.2022 -> 2022-12-21
               if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
                 const [dd, mm, yyyy] = val.split(".");
                 return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
               }
-              // 2022/12/21 -> 2022-12-21
               if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
                 return val.replaceAll("/", "-");
               }
-              return val; // assume already ISO
+              return val;
             };
             if (pdfInfo?.cod_date || pdfInfo?.codDate) {
               const raw = pdfInfo.cod_date ?? pdfInfo.codDate;
@@ -149,8 +155,8 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
         }
       }
 
-      // Mark irradiance file presence (UI status only)
       if (irrFile) {
+        log('Irradiance file noted:', irrFile.name);
         setIrrResult({ valid: true, message: "Irradiance file noted" });
       } else {
         setIrrResult(null);
@@ -159,6 +165,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
       setLogResult(logRes);
       setPvsystResult(pvRes);
       setChecking(false);
+      log('File checks completed');
     })();
   }, [open, logFile, pvsystFile]);
 
