@@ -27,33 +27,9 @@ export async function parsePDFGlobal(file) {
 			return null;
 		}
 
-		const d = json.data || {};
-		log("Raw parsed PVSyst data:", d);
-
-		const normalized = {
-			siteName: d.siteName || null,
-			gps: d.gps || null,
-			dcSizeKWp: d.dcSizeKWp ?? null,
-			acSizeKW: d.acSizeKW ?? null,
-			moduleModel: d.moduleModel || null,
-			moduleCount: d.moduleCount ?? null,
-			inverterModel: d.inverterModel || null,
-			inverterCount: d.inverterCount ?? null,
-			producedEnergyMWh: d.producedEnergyMWh ?? null,
-			specificYield: d.specificYield ?? null,
-			performanceRatio: d.performanceRatio ?? null,
-			monthly: d.monthly || [],
-			losses: d.losses || [],
-			reportDate: d.reportDate || null,
-			_raw: d,
-		};
-
-		log("Final normalized output:", normalized);
-
 		return {
 			success: true,
-			...d,
-			normalized,
+			data: json.data, // giữ nguyên schema từ backend
 		};
 	} catch (e) {
 		log("Error during parsing or backend communication:", e);

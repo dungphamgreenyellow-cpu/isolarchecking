@@ -127,7 +127,7 @@ export default function FileCheckModal({
         if (info && info.success && setProjectInfo) {
           setProjectInfo((prev) => ({
             ...(prev || {}),
-            pvsyst: info.normalized || null,
+				pvsyst: info?.data || info || null,
           }));
         }
         return info;
@@ -151,7 +151,7 @@ export default function FileCheckModal({
         const projectMeta = {
           siteName: logResultV10.siteName || "",
           log: logResultV10,
-          pvsyst: pvsystInfo ? pvsystInfo.normalized || null : null,
+		  pvsyst: pvsystInfo ? pvsystInfo.data || pvsystInfo || null : null,
           irr: { dailyGHI: null },
         };
         onNext(projectMeta);
