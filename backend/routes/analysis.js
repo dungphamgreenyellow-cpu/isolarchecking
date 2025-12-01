@@ -157,8 +157,8 @@ router.post("/merge", async (req, res) => {
     const { logData, pvsystData } = req.body || {};
 
     const siteName =
-      (logData && logData.siteName) ||
-      (pvsystData && pvsystData.siteName) ||
+      (logData && logData.siteName && logData.siteName.trim()) ||
+      (pvsystData && pvsystData.siteName && pvsystData.siteName.trim()) ||
       "Unknown Site";
 
     const gps =

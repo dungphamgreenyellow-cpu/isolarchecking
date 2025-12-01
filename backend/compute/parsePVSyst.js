@@ -1,22 +1,60 @@
-import fs from "fs";
+    import fs from "fs";
 import pdfParse from "pdf-parse";
 
-function parseNumberFlexible(str) {
-  if (!str) return null;
-  const normalized = String(str)
-    .replace(/[^0-9.,+-]/g, "")
-    .replace(/,/g, ".");
-  const num = parseFloat(normalized);
-  return Number.isFinite(num) ? num : null;
+function toNumber(str) {
+  if (!str && str !== 0) return null;
+  const normalized = String(str).replace(/[^0-9.+\-]/g, "");
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : null;
 }
 
 function cleanText(text) {
+  if (!text) return "";
   return text
     .replace(/\r/g, "")
     .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
     .join("\n");
+}
+
+function extractSection(text, startAnchor, endAnchor) {
+  if (!text) return "";
+  const startRegex = new RegExp(startAnchor, "i");
+  const endRegex = endAnchor ? new RegExp(endAnchor, "i") : null;
+
+  const startMatch = text.match(startRegex);
+  if (!startMatch) return "";
+  const startIdx = startMatch.index ?? 0;
+
+  if (!endRegex) {
+    return text.slice(startIdx);
+  }
+
+  const rest = text.slice(startIdx + startMatch[0].length);
+  const endMatch = rest.match(endRegex);
+  if (!endMatch) return text.slice(startIdx);
+
+  const endIdx = (endMatch.index ?? 0) + startMatch[0].length + startIdx;
+  return text.slice(startIdx, endIdx);
+}
+
+function extractValue(regex, text) {
+  if (!regex || !text) return null;
+  const match = text.match(regex);
+  if (!match) return null;
+  return match[1] ?? null;
+}
+
+function extractAll(regexGlobal, text) {
+  if (!regexGlobal || !text) return [];
+  const out = [];
+  let m;
+  const re = new RegExp(regexGlobal.source, regexGlobal.flags);
+  while ((m = re.exec(text)) !== null) {
+    out.push(m);
+  }
+  return out;
 }
 
 export async function parsePVSystPDF(fileOrBuffer) {
@@ -28,153 +66,149 @@ export async function parsePVSystPDF(fileOrBuffer) {
     const { text } = await pdfParse(buffer);
     const fullText = cleanText(text);
 
-    // Site name as written in the PDF title/header
+    // Project / site name (keep simple, no strict anchor given in spec)
     const siteNameMatch =
-      fullText.match(/Site\s*name[:\s]+(.+)/i) ||
-      fullText.match(/Project\s*name[:\s]+(.+)/i) ||
-      fullText.match(/Project[:\s]+(.+)/i);
+      fullText.match(/Site\s*name\s*[:\-]\s*(.+)/i) ||
+      fullText.match(/Project\s*name\s*[:\-]\s*(.+)/i) ||
+      fullText.match(/Project\s*[:\-]\s*(.+)/i);
     const siteName = siteNameMatch ? siteNameMatch[1].trim() : null;
 
-    const reportDateMatch =
-      fullText.match(/Report Date[:\s]+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i) ||
-      fullText.match(/Generated on[:\s]+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i);
-    const reportDate = reportDateMatch ? reportDateMatch[1] : null;
-
-    const gps = {
-      lat:
-        parseNumberFlexible(
-          fullText.match(/Latitude[:\s]+([0-9.+-]+)/i)?.[1]
-        ) ||
-        parseNumberFlexible(fullText.match(/([0-9.]+)°\s*[NS]/i)?.[1]) ||
-        null,
-      lon:
-        parseNumberFlexible(
-          fullText.match(/Longitude[:\s]+([0-9.+-]+)/i)?.[1]
-        ) ||
-        parseNumberFlexible(fullText.match(/([0-9.]+)°\s*[EW]/i)?.[1]) ||
-        null,
-      alt: parseNumberFlexible(fullText.match(/Altitude[:\s]+([0-9.]+)/i)?.[1]),
-      timezone:
-        fullText.match(/Time\s*zone[:\s]+(UTC[+-]?\d+)/i)?.[1] ||
-        fullText.match(/UTC[+-]?\d+/i)?.[0] ||
-        null,
-    };
-
-    const systemInfo = {
-      systemPowerDC_kWp: parseNumberFlexible(
-        fullText.match(/Pnom\s*total[:\s]+([0-9.]+)\s*kWp/i)?.[1]
-      ),
-      systemPowerAC_kW: parseNumberFlexible(
-        fullText.match(/Pnom\s*total[:\s]+([0-9.]+)\s*kWac?/i)?.[1]
-      ),
-      moduleCount: parseNumberFlexible(
-        fullText.match(/Nb\.?\s*of\s*modules[:\s]+([0-9.]+)/i)?.[1]
-      ),
-      inverterCount: parseNumberFlexible(
-        fullText.match(/Nb\.?\s*of\s*units[:\s]+([0-9.]+)/i)?.[1]
-      ),
-      dcacRatio: null,
-    };
-    if (systemInfo.systemPowerDC_kWp && systemInfo.systemPowerAC_kW) {
-      systemInfo.dcacRatio = parseFloat(
-        (systemInfo.systemPowerDC_kWp / systemInfo.systemPowerAC_kW).toFixed(3)
-      );
-    }
-
-    const pvArray = {
-      moduleManufacturer:
-        fullText.match(/Module\s*Manufacturer[:\s]+(.+)/i)?.[1]?.trim() || null,
-      moduleModel:
-        fullText.match(/Module\s*Model[:\s]+(.+)/i)?.[1]?.trim() || null,
-      moduleUnitWp: parseNumberFlexible(
-        fullText.match(/Module\s*Unit\s*Power[:\s]+([0-9.]+)\s*Wp/i)?.[1]
-      ),
-      inverterManufacturer:
-        fullText.match(/Inverter\s*Manufacturer[:\s]+(.+)/i)?.[1]?.trim() || null,
-      inverterModel:
-        fullText.match(/Inverter\s*Model[:\s]+(.+)/i)?.[1]?.trim() || null,
-      inverterUnit_kW: parseNumberFlexible(
-        fullText.match(/Inverter\s*Unit\s*Power[:\s]+([0-9.]+)\s*kW/i)?.[1]
-      ),
-    };
-
-    const arrayLossesBlock =
-      fullText.match(/Array\s*losses[\s\S]{1,400}/i)?.[0] || "";
-    const arrayLosses = {
-      soilingLoss_percent: parseNumberFlexible(
-        arrayLossesBlock.match(/Soiling[:\s]+([0-9.]+)%/i)?.[1]
-      ),
-      thermalLoss_percent: parseNumberFlexible(
-        arrayLossesBlock.match(/Thermal\s*loss(?:es)?[:\s]+([0-9.]+)%/i)?.[1]
-      ),
-      mismatch_percent: parseNumberFlexible(
-        arrayLossesBlock.match(/Mismatch[:\s]+([0-9.]+)%/i)?.[1]
-      ),
-      lidd_percent: parseNumberFlexible(
-        arrayLossesBlock.match(/LID[:\s]+([0-9.]+)%/i)?.[1]
-      ),
-    };
-
-    const expected = {
-      producedEnergy_MWh: parseNumberFlexible(
-        fullText.match(/Produced\s*Energy[:\s]+([0-9.]+)\s*MWh/i)?.[1]
-      ),
-      specificProduction_kWh_kWp: parseNumberFlexible(
-        fullText.match(/Specific\s*production[:\s]+([0-9.]+)\s*kWh\/kWp/i)?.[1]
-      ),
-      pr_percent: parseNumberFlexible(
-        fullText.match(/Performance\s*Ratio[:\s]+([0-9.]+)%/i)?.[1]
-      ),
-    };
-
-    const monthlyRaw =
-      fullText.match(/Balances\s*and\s*Main\s*Results[\s\S]{200,5000}/i)?.[0] ||
-      "";
-    const lines = monthlyRaw.split("\n").map((l) => l.trim());
-    let headerLine = lines.find((l) =>
-      /Month/i.test(l) && /E_Grid|PR|GlobHor/i.test(l)
+    // Geographical site section → GPS + timezone
+    const geoSection = extractSection(
+      fullText,
+      "Geographical site",
+      "System summary|PV Array Characteristics|Array losses|Results summary|Balances and main results|Loss diagram"
     );
 
-    let monthly = [];
-    if (headerLine) {
-      const headers = headerLine
-        .split(/\s+/)
-        .map((h) => h.trim())
-        .filter((h) => h.length > 0);
+    const gpsMatch = geoSection.match(
+      /Latitude\s*:\s*([\d.\-]+).*?Longitude\s*:\s*([\d.\-]+)/i
+    );
+    const latitude = gpsMatch ? toNumber(gpsMatch[1]) : null;
+    const longitude = gpsMatch ? toNumber(gpsMatch[2]) : null;
 
-      const monthLines = lines.filter((l) => /^[A-Za-z]{3}\s+/i.test(l));
+    const timezoneMatch = geoSection.match(/Time\s*zone\s*:?\s*([^\n]+)/i);
+    const timezone = timezoneMatch ? timezoneMatch[1].trim() : null;
 
-      for (const ml of monthLines) {
-        const parts = ml.split(/\s+/);
-        if (parts.length < headers.length) continue;
+    // System summary section → DC/AC sizes, module/inverter counts
+    const systemSection = extractSection(
+      fullText,
+      "System summary",
+      "PV Array Characteristics|Array losses|Results summary|Balances and main results|Loss diagram"
+    );
 
-        const row = {};
-        headers.forEach((h, idx) => {
-          const value = parts[idx];
-          row[h] = parseNumberFlexible(value) ?? value;
-        });
+    const dcSizeKWp = toNumber(
+      extractValue(/Pnom total\s+([\d.]+)\s*kWp/i, systemSection)
+    );
+    const acSizeKW = toNumber(
+      extractValue(/Total\s+AC.*?([\d.]+)\s*kW/i, systemSection)
+    );
 
-        monthly.push(row);
-      }
-    }
+    // PV Array characteristics → module/inverter model + counts
+    const pvSection = extractSection(
+      fullText,
+      "PV Array Characteristics",
+      "Array losses|Results summary|Balances and main results|Loss diagram"
+    );
+
+    const moduleModelRaw = extractValue(
+      /Module[\s\S]*?Model\s*:\s*([A-Za-z0-9\-\/]+)/i,
+      pvSection
+    );
+    const moduleModel = moduleModelRaw ? moduleModelRaw.trim() : null;
+
+    const moduleCount = toNumber(
+      extractValue(/Number of modules\s*:\s*(\d+)/i, pvSection)
+    );
+
+    const inverterModelRaw = extractValue(
+      /Inverter[\s\S]*?Model\s*:\s*([A-Za-z0-9\-\/]+)/i,
+      pvSection
+    );
+    const inverterModel = inverterModelRaw ? inverterModelRaw.trim() : null;
+
+    const inverterCount = toNumber(
+      extractValue(/Number of inverters\s*:\s*(\d+)/i, pvSection)
+    );
+
+    // Results summary → produced energy, specific yield, PR
+    const resultsSection = extractSection(
+      fullText,
+      "Results summary",
+      "Balances and main results|Loss diagram"
+    );
+
+    const producedEnergyMWh = toNumber(
+      extractValue(/Produced Energy\s+([\d.]+)\s*MWh/i, resultsSection)
+    );
+    const specificYield = toNumber(
+      extractValue(/Specific.*?([\d.]+)\s*kWh\/kWp/i, resultsSection)
+    );
+    const performanceRatio = toNumber(
+      extractValue(/Performance Ratio.*?([\d.]+)\s*%/i, resultsSection)
+    );
+
+    // Report date (global)
+    const reportDateRaw = extractValue(
+      /Report Date.*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+      fullText
+    );
+    const reportDate = reportDateRaw || null;
+
+    // Balances and main results → monthly table
+    const balancesSection = extractSection(
+      fullText,
+      "Balances and main results",
+      "Loss diagram"
+    );
+
+    const monthRegex = new RegExp(
+      /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)/.source,
+      "gim"
+    );
+
+    const monthlyMatches = extractAll(monthRegex, balancesSection);
+    const monthly = monthlyMatches.map((m) => ({
+      month: m[1],
+      globHor: toNumber(m[2]),
+      diffHor: toNumber(m[3]),
+      tAmb: toNumber(m[4]),
+      globInc: toNumber(m[5]),
+      globEff: toNumber(m[6]),
+      eArray: toNumber(m[7]),
+      eGrid: toNumber(m[8]),
+    }));
+
+    // Loss diagram → list of label/value pairs
+    const lossSection = extractSection(fullText, "Loss diagram", null);
+    const lossRegex = /([A-Za-z \/\-]+)\s*:\s*([\-\+]?\d+\.\d+)\s*%/g;
+    const lossMatches = extractAll(lossRegex, lossSection);
+    const losses = lossMatches.map((m) => ({
+      label: m[1].trim(),
+      value: toNumber(m[2]),
+    }));
 
     return {
       success: true,
       siteName,
+      latitude,
+      longitude,
+      timezone,
+      moduleModel,
+      moduleCount,
+      inverterModel,
+      inverterCount,
+      dcSizeKWp,
+      acSizeKW,
+      producedEnergyMWh,
+      specificYield,
+      performanceRatio,
+      monthly,
+      losses,
       reportDate,
-      gps,
-      systemInfo,
-      pvArray,
-      expected,
-      arrayLosses,
-      monthly: monthly.length > 0 ? monthly : null,
     };
   } catch (err) {
     console.error("Error parsing PVSyst PDF:", err);
-    return {
-      success: false,
-      error: err.message || "Unknown error",
-    };
+    return { success: false, error: err.message || "Unknown error" };
   }
 }
 

@@ -90,7 +90,7 @@ export async function streamParseAndCompute(buffer) {
           if (/total\s*yield/.test(t)) yieldCol = i;
           if (/manageobject|device name|inverter/.test(t)) invCol = i;
           if (/(irradiance|ghi|gti|solar)/.test(t)) irrCol = i;
-          if (t.includes("site name")) siteCol = i;
+          if (t.includes("plant") || t.includes("site") || t.includes("station")) siteCol = i;
         });
       }
 
