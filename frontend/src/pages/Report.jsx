@@ -6,12 +6,13 @@
 // ✅ Pastel A4 layout
 
 import React from "react";
-import ReportHeader from "./ReportHeader.jsx";
 import { useLocation } from "react-router-dom";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { getMonthlyGHI } from "../data/ghiBaseline";
 import { getBackendBaseUrl } from "../config";
-import { normalizeDateString, formatDateDisplay } from "../utils/date";
+import { formatDateDisplay } from "../utils/date";
+import ReportPage1 from "./report/ReportPage1";
+import ReportPage2 from "./report/ReportPage2";
+import ReportPage3 from "./report/ReportPage3";
 
 function fmtMonthRange(start, end) {
   if (!start || !end) return "—";
@@ -31,27 +32,19 @@ export default function Report() {
   const location = useLocation();
   const { projectData, confirmData } = location.state || {};
 
-  const [realPR, setRealPR] = React.useState("—");
-  const [dailyRPR, setDailyRPR] = React.useState([]);
-  const [loadingPR, setLoadingPR] = React.useState(false);
-  const [periodText, setPeriodText] = React.useState("—");
-  const [generatedText, setGeneratedText] = React.useState(formatDateDisplay(new Date()));
-  const [totalIrr, setTotalIrr] = React.useState(0);
-
-  if (!projectData && !confirmData && !computeData)
+  if (!projectData && !confirmData)
     return (
       <div className="text-center mt-20 text-gray-500">No project data found. Please go back and analyze again.</div>
     );
 
   const proj = projectData || confirmData || {};
-  const log = projectData?.log || null;
-  const irr = projectData?.irr || { dailyGHI: null };
-  const pvsyst = projectData?.pvsyst || {};
-
-  const siteName = projectData?.siteName || "—";
-  const days = log ? Object.keys(log.dailyProduction || {}).length : 0;
+  const log = proj.log || null;
+  const irr = proj.irr || { dailyGHI: null };
   const gpsCountry = proj.gpsCountry;
   const actualProduction = log?.dailyProductionTotal || 0;
+  const days = log ? Object.keys(log.dailyProduction || {}).length : 0;
+
+  const [totalIrr, setTotalIrr] = React.useState(0);
 
   React.useEffect(() => {
     (async () => {
@@ -62,131 +55,29 @@ export default function Report() {
         if (parse && parse.firstDay && parse.lastDay) {
           month = new Date(parse.firstDay).getMonth() + 1;
           reportDays = Object.keys(parse.dailyProduction || {}).length || reportDays;
-          setPeriodText(fmtMonthRange(parse.firstDay, parse.lastDay));
         }
         const baselineGHI = getMonthlyGHI(gpsCountry || "Vietnam", month) / 30;
         setTotalIrr(Math.round(baselineGHI * reportDays));
-        setGeneratedText(formatDateDisplay(new Date()));
       } catch (err) {
-        setPeriodText("—");
+        setTotalIrr(0);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, logFile]);
+  }, [log, days, gpsCountry]);
 
-  const now = new Date();
-  const country = gpsCountry || "Vietnam";
-  const monthNow = now.getMonth() + 1;
-  const baselineGHI = getMonthlyGHI(country, monthNow) / 30;
-  const reportDays = days || 15;
-  const actualProd = Number(actualProduction) || 0;
-  const capKWp = Number(String((confirmData?.installedCapacity != null ? `${confirmData.installedCapacity}` : installed) || "").replace(/[^\d.]/g, "")) || 0;
-  const totalIrrNumber = Number(totalIrr) || 0;
-  const rprRef = capKWp > 0 && totalIrrNumber > 0 ? ((actualProd / (capKWp * totalIrrNumber)) * 100).toFixed(2) : "0.00";
-
-  React.useEffect(() => {
-    if (rprData && typeof rprData === "object") {
-      setRealPR(rprData.RPR ?? rprRef);
-      setDailyRPR(rprData.dailySeries || []);
-      return;
-    }
-    (async () => {
-      const parse = log || null;
-      if (!parse || !capKWp) {
-        setRealPR(rprRef);
-        setDailyRPR([]);
-        return;
-      }
-      try {
-        setLoadingPR(true);
-        const payload = { records: parse.records, capacity: capKWp, irradiance: irr.dailyGHI || null };
-        const r = await fetch(`${backend}/analysis/realpr`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        const json = await r.json();
-        if (!json?.success) {
-          console.error("RPR backend error:", json?.error || json);
-          setRealPR("0.00");
-        } else {
-          const res = json.data || json.rpr || json.details || json;
-          setRealPR(res?.RPR ?? "0.00");
-          const dailySeries = res?.dailySeries || [];
-          setDailyRPR(dailySeries);
-        }
-      } catch (err) {
-        console.error("RPR calc error:", err);
-        setRealPR("0.00");
-      } finally {
-        setLoadingPR(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log, capKWp, rprData]);
-
-  const getFontSizeForInverter = (text = "") => {
-    const len = text.length;
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-    if (isMobile) {
-      if (len > 55) return "10.5px";
-      if (len > 45) return "11.5px";
-      if (len > 35) return "12px";
-      return "13px";
-    } else {
-      if (len > 55) return "11.5px";
-      if (len > 45) return "12.5px";
-      if (len > 35) return "13.5px";
-      return "15px";
-    }
+  const dataForPages = {
+    project: proj,
+    log,
+    irr,
+    actualProduction,
+    totalIrr,
   };
 
   return (
     <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
-      <div className="w-full max-w-[794px] mx-auto">
-        <ReportHeader data={projectData || {}} />
-        {/* PROJECT INFO removed as requested */}
-      {/* SUMMARY & CHART */}
-      <div className="w-full bg-[#F9FBFF] rounded-none shadow p-6 mb-6 mt-6">
-        <h2 className="text-lg font-semibold mb-4 text-gray-700">Summary &amp; Performance Trend</h2>
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="grid grid-cols-2 gap-4 flex-1">
-            {[
-              { title: ["Actual", "Production"], value: (actualProd || 0).toLocaleString(), unit: "kWh", color: "#9CC9FF" },
-              { title: ["Total", "Irradiation"], value: totalIrr, unit: "kWh/m²", color: "#FFF3B0" },
-              { title: ["Real", "Performance Ratio"], value: loadingPR ? "…" : realPR, unit: "%", color: "#E6C4FF" },
-              { title: ["Performance", "Ratio"], value: rprRef, unit: "%", color: "#B9FBC0" },
-            ].map((c, i) => (
-              <div key={i} className="rounded-none shadow-sm px-4 py-4 flex flex-col items-center justify-center text-center" style={{ backgroundColor: c.color }}>
-                <div className="text-sm font-medium text-gray-700 leading-tight whitespace-pre-line">{c.title.join("\n")}</div>
-                <div className="mt-3">
-                  <p className="text-2xl font-bold text-gray-800 leading-tight">
-                    {c.value}
-                    <span className="text-base font-semibold text-gray-700 ml-1">{c.unit}</span>
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex-1 bg-[#FFFFFF] rounded-none shadow-sm p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2 text-center">Daily RPR (%) Trend</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={dailyRPR.length > 0 ? dailyRPR : [{ date: "01", RPR: Number(realPR) || 0 }]} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                <Tooltip />
-                <Line type="monotone" dataKey="RPR" stroke="#66B2FF" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        {!irr?.dailyGHI && <p className="text-left text-gray-500 italic text-xs mt-3 ml-1">No irradiation file uploaded — using monthly baseline for reference.</p>}
-      </div>
-
-      {rprData !== null && (
-        <div className="mt-4 text-sm text-gray-600">Advanced Analysis Enabled • RPR: {rprData.RPR ? rprData.RPR.toFixed(2) + "%" : "N/A"}</div>
-      )}
-
-      <div className="w-full flex justify-end pr-3 mt-auto mb-4">
-        <p className="text-[11px] italic text-gray-400 font-light">Automatically generated by iSolarChecking</p>
-      </div>
+      <div className="w-full max-w-[794px] mx-auto space-y-8">
+        <ReportPage1 data={dataForPages} />
+        <ReportPage2 data={dataForPages} />
+        <ReportPage3 />
       </div>
     </div>
   );
