@@ -66,6 +66,9 @@
         const { text } = await pdfParse(buffer);
         const fullText = cleanText(text);
 
+        const siteNameRaw = extractValue(/Project\s*:\s*(.+)/i, fullText);
+        const siteName = siteNameRaw ? siteNameRaw.trim() : null;
+
         // Geographical site section → GPS
         const geoSection = extractSection(
           fullText,
@@ -190,7 +193,7 @@
 
         return {
           success: true,
-          siteName: null,
+          siteName,
           gps,
           dcSizeKWp,
           acSizeKW,
