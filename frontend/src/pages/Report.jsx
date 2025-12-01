@@ -28,14 +28,14 @@ function fmtMonthRange(start, end) {
 
 export default function Report() {
   const location = useLocation();
-  const { projectData, confirmData } = location.state || {};
+  const { projectData } = location.state || {};
 
-  if (!projectData && !confirmData)
+  if (!projectData)
     return (
-      <div className="text-center mt-20 text-gray-500">No project data found. Please go back and analyze again.</div>
+      <div className="text-center mt-20 text-gray-500">No project data</div>
     );
 
-  const proj = projectData || confirmData || {};
+  const proj = projectData || {};
   const log = proj.log || null;
   const irr = proj.irr || { dailyGHI: null };
   const gpsCountry = proj.gpsCountry;
@@ -64,8 +64,9 @@ export default function Report() {
   }, [log, days, gpsCountry]);
 
   const dataForPages = {
-    project: proj,
+    ...proj,
     log,
+    pvsyst: proj.pvsyst || null,
     irr,
     actualProduction,
     totalIrr,
@@ -76,7 +77,7 @@ export default function Report() {
     <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
       <div className="w-full max-w-[794px] mx-auto space-y-8">
         <ReportPage1 data={dataForPages} />
-        <ReportPage2 data={dataForPages} />
+        <ReportPage2 data={dataForPages} inverterAnalytics={inverterAnalytics} />
         <ReportPage3 />
       </div>
     </div>

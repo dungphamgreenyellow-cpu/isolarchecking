@@ -6,12 +6,13 @@
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 // removed legacy api helpers; all calls use fetch/axios directly
 import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 import { getDefaultValues } from "../hooks/useProjectParser";
 import { getBackendBaseUrl } from "../config";
-import debug from 'debug';
+import debug from "debug";
 
 // Backend base URL (ensure correct Render domain fallback)
 const backend = getBackendBaseUrl();
@@ -79,12 +80,27 @@ export default function HomePage() {
     setFileCheckOpen(false);
     setChecking(true);
     try {
-      const projectMetaV10 = {
-        siteName: parsedData?.siteName || parsedData?.log?.siteName || "",
-        log: parsedData?.log || null,
-        pvsyst: parsedData?.pvsyst || null,
-        irr: parsedData?.irr || { dailyGHI: null },
-      };
+      const logData = parsedData?.log || null;
+      const pvsystData = parsedData?.pvsyst || null;
+
+      // Call backend merge endpoint to build unified project meta
+      const mergeResp = await axios.post(`${backend}/analysis/merge`, {
+        logData,
+        pvsystData,
+      });
+
+      if (!mergeResp.data || !mergeResp.data.ok) {
+        alert("Merge failed");
+        setChecking(false);
+        return;
+      }
+
+      const projectMetaV10 = mergeResp.data.data || {};
+
+      // Ensure irr always present
+      if (!projectMetaV10.irr) {
+        projectMetaV10.irr = { dailyGHI: null };
+      }
 
       setProjectData(projectMetaV10);
       setComputeData(projectMetaV10.log);
@@ -108,20 +124,16 @@ export default function HomePage() {
   };
 
   async function handleConfirm(confirmForm) {
-    log('ProjectConfirmModal confirmed with data:', confirmForm);
+    log("ProjectConfirmModal confirmed with data:", confirmForm);
     setModalOpen(false);
     setConfirmData(confirmForm);
-    const mergedProjectData = projectData; // already merged from parsedData step
-    log('Navigating to report page with data:', {
+    const mergedProjectData = projectData;
+    log("Navigating to report page with data:", {
       projectData: mergedProjectData,
-      confirmData: confirmForm,
-      computeData: computeData,
     });
     navigate("/report", {
       state: {
         projectData: mergedProjectData,
-        confirmData: confirmForm,
-        computeData: computeData,
       },
     });
   }

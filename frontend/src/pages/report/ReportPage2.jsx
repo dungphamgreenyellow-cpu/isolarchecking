@@ -5,9 +5,7 @@ import InvTemperatureHeatmap from "../../components/charts/inverter/InvTemperatu
 import VoltageProfileChart from "../../components/charts/inverter/VoltageProfileChart";
 import FrequencyChart from "../../components/charts/inverter/FrequencyChart";
 
-export default function ReportPage2({ data }) {
-  const inverterAnalytics = data?.inverterAnalytics || null;
-
+export default function ReportPage2({ data, inverterAnalytics }) {
   return (
     <div className="page-break space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
