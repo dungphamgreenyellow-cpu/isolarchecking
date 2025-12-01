@@ -1,5 +1,4 @@
 import React from "react";
-import ProjectHeader from "../ReportHeader";
 
 // Placeholder sub-sections for KPI summary
 function ExecutiveSummary({ data }) {
@@ -24,8 +23,7 @@ function PerformanceTable({ data }) {
 
 export default function ReportPage1({ data }) {
   return (
-    <div className="page-break space-y-4">
-      <ProjectHeader data={data} />
+    <div className="space-y-4">
       <ExecutiveSummary data={data} />
       <DailyProductionChart data={data} />
       <DailyRPRChart data={data} />

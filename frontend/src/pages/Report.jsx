@@ -77,20 +77,14 @@ export default function Report() {
   return (
     <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
       <div className="w-full max-w-[794px] mx-auto space-y-8">
-        {/* PAGE 1 — restored classic layout */}
-        <ReportPage1 data={dataForPages} />
-
-        {/* PAGE BREAK */}
-        <div className="page-break"></div>
-
-        {/* PAGE 2 — INVERTER ANALYTICS */}
-        <ReportPage2 data={dataForPages} inverterAnalytics={inverterAnalytics} />
-
-        {/* PAGE BREAK */}
-        <div className="page-break"></div>
-
-        {/* PAGE 3 — DATA SOURCES & METHODOLOGY */}
-        <ReportPage3 />
+    <>
+      <ReportHeader data={dataForPages} />
+      <ReportPage1 data={dataForPages} />
+      <div className="page-break"></div>
+      <ReportPage2 data={dataForPages} inverterAnalytics={inverterAnalytics} />
+      <div className="page-break"></div>
+      <ReportPage3 />
+    </>
       </div>
     </div>
   );

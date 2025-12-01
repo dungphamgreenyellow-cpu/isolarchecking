@@ -31,19 +31,21 @@ export async function parsePDFGlobal(file) {
 		log("Raw parsed PVSyst data:", d);
 
 		const normalized = {
-			reportDate: d.reportDate || null,
+			siteName: d.siteName || null,
 			gps: d.gps || null,
-			dcSizeKWp: d.dcSizeKWp || null,
-			acSizeKW: d.acSizeKW || null,
+			dcSizeKWp: d.dcSizeKWp ?? null,
+			acSizeKW: d.acSizeKW ?? null,
 			moduleModel: d.moduleModel || null,
-			moduleCount: d.moduleCount || null,
+			moduleCount: d.moduleCount ?? null,
 			inverterModel: d.inverterModel || null,
-			inverterCount: d.inverterCount || null,
-			producedEnergyMWh: d.producedEnergyMWh || null,
-			specificYield: d.specificYield || null,
-			performanceRatio: d.performanceRatio || null,
-			monthly: d.monthly || null,
-			losses: d.losses || null,
+			inverterCount: d.inverterCount ?? null,
+			producedEnergyMWh: d.producedEnergyMWh ?? null,
+			specificYield: d.specificYield ?? null,
+			performanceRatio: d.performanceRatio ?? null,
+			monthly: d.monthly || [],
+			losses: d.losses || [],
+			reportDate: d.reportDate || null,
+			_raw: d,
 		};
 
 		log("Final normalized output:", normalized);

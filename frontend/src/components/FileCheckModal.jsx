@@ -218,7 +218,7 @@ export default function FileCheckModal({
                   📄 PVSyst File: {pvsystFile?.name}
                 </span>
                 <span>
-                  {checking ? "…" : pvsystResult?.valid ? "✅" : "❌"}
+		          {checking ? "…" : pvsystResult?.success ? "✅" : "❌"}
                 </span>
               </div>
 
@@ -227,7 +227,7 @@ export default function FileCheckModal({
                   className={`${
                     checking
                       ? "bg-amber-500 animate-pulse"
-                      : pvsystResult?.valid
+                      : pvsystResult?.success
                       ? "bg-green-500"
                       : "bg-red-500"
                   } h-full`}
