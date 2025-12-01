@@ -149,7 +149,10 @@ export default function FileCheckModal({
 
       if (okLog && okPvsyst) {
         const projectMeta = {
-          siteName: logResultV10.siteName || "",
+          siteName:
+            logResultV10.siteName ||
+            (pvsystInfo && (pvsystInfo.data?.siteName || pvsystInfo.siteName)) ||
+            "",
           log: logResultV10,
 		  pvsyst: pvsystInfo ? pvsystInfo.data || pvsystInfo || null : null,
           irr: { dailyGHI: null },

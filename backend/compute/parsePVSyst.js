@@ -69,67 +69,53 @@
         const siteNameRaw = extractValue(/Project\s*:\s*(.+)/i, fullText);
         const siteName = siteNameRaw ? siteNameRaw.trim() : null;
 
-        // Geographical site section → GPS
+        // Geographical site section  GPS
         const geoSection = extractSection(
           fullText,
           "Geographical site",
           "System summary"
         );
 
-        const latRaw = extractValue(/Latitude\s+([\d.]+)/i, geoSection);
-        const lonRaw = extractValue(/Longitude\s+([\d.]+)/i, geoSection);
+        const latRaw = extractValue(/Latitude\s+([\d.,]+)/i, geoSection);
+        const lonRaw = extractValue(/Longitude\s+([\d.,]+)/i, geoSection);
         const gps = {
           lat: toNumber(latRaw),
           lon: toNumber(lonRaw),
         };
 
-        // System summary section → DC/AC sizes
+        // System summary section  DC/AC sizes (Fuji Seal)
         const systemSection = extractSection(
           fullText,
           "System summary",
-          "Array Characteristics"
+          "PV Array Characteristics"
         );
 
         const dcSizeKWp = toNumber(
-          extractValue(/Total array power\s+([\d.]+)\s*kWp/i, systemSection)
+          extractValue(/Pnom\s+total\s+([\d.,]+)\s*kWp/i, systemSection) ||
+            extractValue(/Total array power\s+([\d.,]+)\s*kWp/i, systemSection)
         );
         const acSizeKW = toNumber(
-          extractValue(/Total\s+AC\s+power\s+([\d.]+)\s*kW/i, systemSection)
+          extractValue(/Grid power\s+([\d.,]+)\s*kW/i, systemSection) ||
+            extractValue(/Total\s+AC\s+power\s+([\d.,]+)\s*kW/i, systemSection)
         );
 
-        // Array characteristics → module/inverter model + counts
+        // PV array / system information (Fuji Seal)
         const pvSection = extractSection(
           fullText,
-          "Array Characteristics",
-          "Array losses"
-        );
-
-        const moduleModelRaw = extractValue(
-          /Model\s*:\s*([A-Za-z0-9\-\/]+)/i,
-          pvSection
-        );
-        const moduleModel = moduleModelRaw ? moduleModelRaw.trim() : null;
-
-        const moduleCount = toNumber(
-          extractValue(/Nb of modules\s*:\s*([0-9]+)/i, pvSection)
-        );
-
-        const inverterModelRaw = extractValue(
-          /Inverter\s*Model\s*:\s*([A-Za-z0-9\-\/]+)/i,
-          pvSection
-        );
-        const inverterModel = inverterModelRaw ? inverterModelRaw.trim() : null;
-
-        const inverterCount = toNumber(
-          extractValue(/Number of inverters\s*:\s*([0-9]+)/i, pvSection)
-        );
-
-        // Array losses section (anchor only, not parsed yet)
-        const _arrayLossesSection = extractSection(
-          fullText,
-          "Array losses",
+          "System information",
           "Results summary"
         );
+
+        const moduleCount = toNumber(
+          extractValue(/Nb\.\s*of modules\s+([\d.,]+)/i, pvSection)
+        );
+
+        const inverterCount = toNumber(
+          extractValue(/Nb\.\s*of units\s+([\d.,]+)/i, pvSection)
+        );
+
+        const moduleModel = null;
+        const inverterModel = null;
 
         // Results summary → produced energy, specific yield, PR
         const resultsSection = extractSection(
@@ -139,23 +125,26 @@
         );
 
         const producedEnergyMWh = toNumber(
-          extractValue(/Produced Energy.*?([\d.]+)\s*MWh/i, resultsSection)
+          extractValue(/Produced Energy.*?([\d.,]+)\s*MWh/i, resultsSection)
         );
         const specificYield = toNumber(
           extractValue(
-            /Specific production.*?([\d.]+)\s*kWh\/kWp/i,
+            /Specific production.*?([\d.,]+)\s*kWh\/kWp/i,
             resultsSection
           )
         );
         const performanceRatio = toNumber(
-          extractValue(/Performance Ratio.*?([\d.]+)\s*%/i, resultsSection)
+          extractValue(/Perf\.?\s*Ratio.*?([\d.,]+)\s*%/i, resultsSection) ||
+            extractValue(/Performance Ratio.*?([\d.,]+)\s*%/i, resultsSection)
         );
 
         // Report date (global)
-        const reportDateRaw = extractValue(
-          /Report Date.*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
-          fullText
-        );
+        const reportDateRaw =
+          extractValue(
+            /Simulation date.*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+            fullText
+          ) ||
+          extractValue(/Report Date.*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i, fullText);
         const reportDate = reportDateRaw || null;
 
         // Balances and main results → monthly table
@@ -182,9 +171,9 @@
           eGrid: toNumber(m[8]),
         }));
 
-        // Loss diagram → list of label/value pairs
+        // Loss diagram  list of label/value pairs (no colon required)
         const lossSection = extractSection(fullText, "Loss diagram", null);
-        const lossRegex = /([A-Za-z \/\-]+)\s*:\s*([\-\+]?\d+\.\d+)\s*%/g;
+        const lossRegex = /(.+?)\s+(-?\d+(?:\.\d+)?)\s*%/g;
         const lossMatches = extractAll(lossRegex, lossSection);
         const losses = lossMatches.map((m) => ({
           label: m[1].trim(),

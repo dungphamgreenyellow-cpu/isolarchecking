@@ -157,8 +157,9 @@ router.post("/merge", async (req, res) => {
     const { logData, pvsystData } = req.body || {};
 
     const siteName =
-      (logData && logData.siteName && logData.siteName.trim()) ||
-      "Unknown Site";
+			(logData && logData.siteName && logData.siteName.trim()) ||
+			(pvsystData && pvsystData.siteName && pvsystData.siteName.trim()) ||
+			"Unknown Site";
 
     const gps = (pvsystData && pvsystData.gps) || null;
 
@@ -170,9 +171,7 @@ router.post("/merge", async (req, res) => {
 
     const inverterModel = (pvsystData && pvsystData.inverterModel) || null;
 
-    const expectedEnergy =
-      (pvsystData && pvsystData.producedEnergyMWh) ||
-      null;
+    const expectedEnergy = (pvsystData && pvsystData.producedEnergyMWh) || null;
 
     const codDate = (logData && logData.firstDay) || null;
 

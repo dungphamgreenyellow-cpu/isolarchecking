@@ -60,6 +60,7 @@ export async function streamParseAndCompute(buffer) {
   let parsedRecordsCount = 0;
   const invDayMap = {};
   const records = [];
+  const rawRows = [];
 
   await new Promise((resolve, reject) => {
     const input = Readable.from(buffer);
@@ -102,7 +103,7 @@ export async function streamParseAndCompute(buffer) {
 
         if (siteName == null && siteCol !== -1) {
           const sn = cells[siteCol];
-          if (sn) siteName = sn;
+          if (sn) siteName = sn.trim();
         }
 
         const day = normalizeDate(rawT);
@@ -135,6 +136,53 @@ export async function streamParseAndCompute(buffer) {
           activePower,
           irradiance: irr,
         });
+
+        // raw rows for inverter analytics
+        const temp = cells.find(
+          (_, idx) =>
+            headers[idx] &&
+            headers[idx].toLowerCase().includes("internal temperature")
+        );
+        const eff = cells.find(
+          (_, idx) =>
+            headers[idx] &&
+            headers[idx].toLowerCase().includes("inverter efficiency")
+        );
+        const freq = cells.find(
+          (_, idx) =>
+            headers[idx] && headers[idx].toLowerCase().includes("grid frequency")
+        );
+        const vab = cells.find(
+          (_, idx) =>
+            headers[idx] &&
+            headers[idx]
+              .toLowerCase()
+              .includes("grid voltage/grid ab line voltage")
+        );
+        const vbc = cells.find(
+          (_, idx) =>
+            headers[idx] && headers[idx].toLowerCase().includes("bc line voltage")
+        );
+        const vca = cells.find(
+          (_, idx) =>
+            headers[idx] && headers[idx].toLowerCase().includes("ca line voltage")
+        );
+
+        const num = (val) => {
+          const n = Number(String(val || "").replace(/[^0-9.+\-]/g, ""));
+          return Number.isFinite(n) ? n : null;
+        };
+
+        rawRows.push({
+          datetime: rawT,
+          inverter: inv,
+          temperature: num(temp),
+          efficiency: num(eff),
+          frequency: num(freq),
+          voltA: num(vab),
+          voltB: num(vbc),
+          voltC: num(vca),
+        });
       }
 
       rowIndex++;
@@ -156,6 +204,17 @@ export async function streamParseAndCompute(buffer) {
   const keys = Object.keys(daily).sort();
   const total = keys.reduce((acc, d) => acc + (daily[d] || 0), 0);
 
+  const inverterEnergy = {};
+  for (const day of Object.keys(invDayMap)) {
+    for (const inv of Object.keys(invDayMap[day])) {
+      const { min, max } = invDayMap[day][inv];
+      const gain = Math.max(0, max - min);
+      if (gain > 0) {
+        inverterEnergy[inv] = (inverterEnergy[inv] || 0) + gain;
+      }
+    }
+  }
+
   return {
     success: true,
     siteName,
@@ -165,6 +224,8 @@ export async function streamParseAndCompute(buffer) {
     lastDay: keys[keys.length - 1] || null,
     parsedRecordsCount,
     records,
+    inverterEnergy,
+    rawRows,
   };
 }
 
