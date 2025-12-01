@@ -94,7 +94,13 @@ export default function ProjectConfirmModal({ open, initialData = {}, defaultVal
             Cancel
           </button>
           <button
-            onClick={() => onConfirm({ ...initialData, ...form })}
+            onClick={() => {
+              const projectData = { ...initialData, ...form };
+              projectData.siteName = form.siteName;
+              projectData.installedCapacity = form.installedCapacity;
+              projectData.codDate = form.codDate;
+              onConfirm(projectData);
+            }}
             className="px-5 py-2 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700"
           >
             Confirm

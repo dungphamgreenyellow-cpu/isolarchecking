@@ -83,6 +83,14 @@ export default function HomePage() {
       const logData = parsedData?.log || null;
       const pvsystData = parsedData?.pvsyst || null;
 
+      if (logData) {
+        logData.siteName =
+          logData.siteName ||
+          logData.plantName ||
+          logData.stationName ||
+          null;
+      }
+
       // Call backend merge endpoint to build unified project meta
       const mergeResp = await axios.post(`${backend}/analysis/merge`, {
         logData,

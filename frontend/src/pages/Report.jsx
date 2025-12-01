@@ -10,7 +10,8 @@ import { useLocation } from "react-router-dom";
 import { getMonthlyGHI } from "../data/ghiBaseline";
 import { formatDateDisplay } from "../utils/date";
 import { buildInverterAnalytics } from "../utils/inverterAnalytics";
-import ReportPage1 from "./report/ReportPage1";
+import ReportHeader from "./report/ReportHeader";
+import ExecutiveSummary from "./report/ReportPage1";
 import ReportPage2 from "./report/ReportPage2";
 import ReportPage3 from "./report/ReportPage3";
 
@@ -76,8 +77,24 @@ export default function Report() {
   return (
     <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
       <div className="w-full max-w-[794px] mx-auto space-y-8">
-        <ReportPage1 data={dataForPages} />
+        {/* PAGE 1 — restored classic layout */}
+        <ReportHeader data={dataForPages} />
+        <ExecutiveSummary data={dataForPages} />
+        <DailyProductionChart data={dataForPages} />
+        <DailyRPRChart data={dataForPages} />
+        <EnergyFlowWaterfall data={dataForPages} />
+        <PerformanceTable data={dataForPages} />
+
+        {/* PAGE BREAK */}
+        <div className="page-break"></div>
+
+        {/* PAGE 2 — INVERTER ANALYTICS */}
         <ReportPage2 data={dataForPages} inverterAnalytics={inverterAnalytics} />
+
+        {/* PAGE BREAK */}
+        <div className="page-break"></div>
+
+        {/* PAGE 3 — DATA SOURCES & METHODOLOGY */}
         <ReportPage3 />
       </div>
     </div>
