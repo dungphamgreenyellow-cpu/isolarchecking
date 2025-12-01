@@ -28,6 +28,13 @@ export async function parsePVSystPDF(fileOrBuffer) {
     const { text } = await pdfParse(buffer);
     const fullText = cleanText(text);
 
+    // Site name as written in the PDF title/header
+    const siteNameMatch =
+      fullText.match(/Site\s*name[:\s]+(.+)/i) ||
+      fullText.match(/Project\s*name[:\s]+(.+)/i) ||
+      fullText.match(/Project[:\s]+(.+)/i);
+    const siteName = siteNameMatch ? siteNameMatch[1].trim() : null;
+
     const reportDateMatch =
       fullText.match(/Report Date[:\s]+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i) ||
       fullText.match(/Generated on[:\s]+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i);
@@ -153,6 +160,7 @@ export async function parsePVSystPDF(fileOrBuffer) {
 
     return {
       success: true,
+      siteName,
       reportDate,
       gps,
       systemInfo,

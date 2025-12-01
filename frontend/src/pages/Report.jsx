@@ -8,8 +8,8 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import { getMonthlyGHI } from "../data/ghiBaseline";
-import { getBackendBaseUrl } from "../config";
 import { formatDateDisplay } from "../utils/date";
+import { buildInverterAnalytics } from "../utils/inverterAnalytics";
 import ReportPage1 from "./report/ReportPage1";
 import ReportPage2 from "./report/ReportPage2";
 import ReportPage3 from "./report/ReportPage3";
@@ -25,8 +25,6 @@ function fmtMonthRange(start, end) {
   );
 }
 // Use shared formatter for consistency
-
-const backend = getBackendBaseUrl();
 
 export default function Report() {
   const location = useLocation();
@@ -45,6 +43,7 @@ export default function Report() {
   const days = log ? Object.keys(log.dailyProduction || {}).length : 0;
 
   const [totalIrr, setTotalIrr] = React.useState(0);
+  const inverterAnalytics = log ? buildInverterAnalytics(log) : null;
 
   React.useEffect(() => {
     (async () => {
@@ -70,6 +69,7 @@ export default function Report() {
     irr,
     actualProduction,
     totalIrr,
+    inverterAnalytics,
   };
 
   return (

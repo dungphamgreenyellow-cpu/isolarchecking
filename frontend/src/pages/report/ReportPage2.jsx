@@ -6,24 +6,26 @@ import VoltageProfileChart from "../../components/charts/inverter/VoltageProfile
 import FrequencyChart from "../../components/charts/inverter/FrequencyChart";
 
 export default function ReportPage2({ data }) {
+  const inverterAnalytics = data?.inverterAnalytics || null;
+
   return (
     <div className="page-break space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <ProdDistributionChart data={data} />
+          <ProdDistributionChart inverterAnalytics={inverterAnalytics} />
         </div>
         <div>
-          <InvEfficiencyChart data={data} />
+          <InvEfficiencyChart inverterAnalytics={inverterAnalytics} />
         </div>
       </div>
       <div>
-        <InvTemperatureHeatmap data={data} />
+        <InvTemperatureHeatmap inverterAnalytics={inverterAnalytics} />
       </div>
       <div>
-        <VoltageProfileChart data={data} />
+        <VoltageProfileChart inverterAnalytics={inverterAnalytics} />
       </div>
       <div>
-        <FrequencyChart data={data} />
+        <FrequencyChart inverterAnalytics={inverterAnalytics} />
       </div>
     </div>
   );
