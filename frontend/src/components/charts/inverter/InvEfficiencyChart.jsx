@@ -1,45 +1,118 @@
 import React from "react";
-import { Line } from "react-chartjs-2";
 
 const pastelColors = [
-  "#9CC9FF",
-  "#A0D995",
+  "#66B2FF",
   "#E6C4FF",
   "#FFAB91",
-  "#FFCC80",
-  "#CBA6FF",
+  "#B4E1C5",
+  "#FFD97D",
 ];
 
 export default function InvEfficiencyChart({ inverterAnalytics }) {
-  if (!inverterAnalytics) return <div>InvEfficiency Chart</div>;
-  const { hourly, inverterList = [] } = inverterAnalytics;
-  const hours = Object.keys(hourly.efficiency || {});
+  const effMap = inverterAnalytics?.hourly?.efficiency || null;
+  const inverterList = inverterAnalytics?.inverterList || [];
+  if (!effMap || inverterList.length === 0) {
+    return <div className="text-sm text-gray-500">No data</div>;
+  }
 
-  const datasets = inverterList.map((inv, idx) => ({
-    label: inv,
-    data: hours.map((h) =>
-      hourly.efficiency?.[h] &&
-      numberOrNull(hourly.efficiency[h][inv])
-    ),
-    borderColor: pastelColors[idx % pastelColors.length],
-    fill: false,
-    tension: 0.2,
-  }));
+  const hours = Object.keys(effMap);
+  if (hours.length === 0) {
+    return <div className="text-sm text-gray-500">No data</div>;
+  }
 
-  const data = {
-    labels: hours,
-    datasets,
+  const width = 260;
+  const height = 140;
+  const padding = 20;
+  const innerWidth = width - padding * 2;
+  const innerHeight = height - padding * 2;
+
+  // Flatten values to determine Y scale (0-100%)
+  const allValues = [];
+  hours.forEach((h) => {
+    inverterList.forEach((inv) => {
+      const v = toNumberOrNull(effMap[h]?.[inv]);
+      if (v != null) allValues.push(v);
+    });
+  });
+  const minVal = allValues.length ? Math.min(...allValues, 80) : 90;
+  const maxVal = allValues.length ? Math.max(...allValues, 100) : 100;
+
+  const xForIndex = (idx) => {
+    if (hours.length === 1) return padding + innerWidth / 2;
+    return padding + (idx / (hours.length - 1)) * innerWidth;
   };
 
+  const yForValue = (v) => {
+    if (v == null) return null;
+    const clamped = Math.max(minVal, Math.min(maxVal, v));
+    const ratio = (clamped - minVal) / (maxVal - minVal || 1);
+    return padding + innerHeight - ratio * innerHeight;
+  };
+
+  const polylines = inverterList.map((inv, idx) => {
+    const color = pastelColors[idx % pastelColors.length];
+    const points = hours
+      .map((h, hIdx) => {
+        const val = toNumberOrNull(effMap[h]?.[inv]);
+        const y = yForValue(val);
+        if (y == null) return null;
+        const x = xForIndex(hIdx);
+        return `${x},${y}`;
+      })
+      .filter(Boolean)
+      .join(" ");
+    if (!points) return null;
+    return (
+      <polyline
+        key={inv}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        points={points}
+      />
+    );
+  });
+
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm">
-      <h3 className="text-sm font-semibold mb-2">Inverter Efficiency by Hour</h3>
-      <Line data={data} />
+    <div className="p-4 bg-white rounded-xl shadow-sm">
+      <h3 className="text-sm font-semibold mb-2">Inverter Efficiency (Hourly)</h3>
+      <svg width={width} height={height}>
+        {/* X axis */}
+        <line
+          x1={padding}
+          y1={height - padding}
+          x2={width - padding}
+          y2={height - padding}
+          stroke="#e5e7eb"
+          strokeWidth={0.5}
+        />
+        {/* Y grid (min/max) */}
+        <line
+          x1={padding}
+          y1={padding}
+          x2={width - padding}
+          y2={padding}
+          stroke="#f3f4f6"
+          strokeWidth={0.5}
+        />
+        <line
+          x1={padding}
+          y1={height - padding}
+          x2={width - padding}
+          y2={height - padding}
+          stroke="#f3f4f6"
+          strokeWidth={0.5}
+        />
+        {polylines}
+      </svg>
+      <div className="mt-1 text-[10px] text-gray-500">
+        Eff. based on inverter log (%)
+      </div>
     </div>
   );
 }
 
-function numberOrNull(v) {
+function toNumberOrNull(v) {
   const n = typeof v === "number" ? v : parseFloat(v);
   return Number.isFinite(n) ? n : null;
 }
