@@ -10,7 +10,7 @@ import { useLocation } from "react-router-dom";
 import { getMonthlyGHI } from "../data/ghiBaseline";
 import { formatDateDisplay } from "../utils/date";
 import { buildInverterAnalytics } from "../utils/inverterAnalytics";
-import ReportHeader from "./report/ReportHeader";
+import ReportHeader from "./ReportHeader";
 import ExecutiveSummary from "./report/ReportPage1";
 import ReportPage2 from "./report/ReportPage2";
 import ReportPage3 from "./report/ReportPage3";
