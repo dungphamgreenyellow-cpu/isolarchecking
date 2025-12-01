@@ -70,7 +70,7 @@
         const geoSection = extractSection(
           fullText,
           "Geographical site",
-          "System summary|System Summary|PV Array Characteristics"
+          "System summary"
         );
 
         const latRaw = extractValue(/Latitude\s+([\d.]+)/i, geoSection);
@@ -83,25 +83,22 @@
         // System summary section → DC/AC sizes
         const systemSection = extractSection(
           fullText,
-          "System summary|System Summary",
-          "PV Array Characteristics"
+          "System summary",
+          "Array Characteristics"
         );
 
         const dcSizeKWp = toNumber(
-          extractValue(/Total array power\s*([\d.]+)\s*kWp/i, systemSection)
+          extractValue(/Total array power\s+([\d.]+)\s*kWp/i, systemSection)
         );
         const acSizeKW = toNumber(
-          extractValue(
-            /Inverter\s+.*?Total\s+AC\s+power\s*([\d.]+)\s*kW/i,
-            systemSection
-          )
+          extractValue(/Total\s+AC\s+power\s+([\d.]+)\s*kW/i, systemSection)
         );
 
-        // PV Array characteristics → module/inverter model + counts
+        // Array characteristics → module/inverter model + counts
         const pvSection = extractSection(
           fullText,
-          "PV Array Characteristics",
-          "Array losses|Results summary|Balances and main results|Loss diagram"
+          "Array Characteristics",
+          "Array losses"
         );
 
         const moduleModelRaw = extractValue(
@@ -115,7 +112,7 @@
         );
 
         const inverterModelRaw = extractValue(
-          /Inverter\s+Model\s*:\s*([A-Za-z0-9\-\/]+)/i,
+          /Inverter\s*Model\s*:\s*([A-Za-z0-9\-\/]+)/i,
           pvSection
         );
         const inverterModel = inverterModelRaw ? inverterModelRaw.trim() : null;
@@ -124,11 +121,18 @@
           extractValue(/Number of inverters\s*:\s*([0-9]+)/i, pvSection)
         );
 
+        // Array losses section (anchor only, not parsed yet)
+        const _arrayLossesSection = extractSection(
+          fullText,
+          "Array losses",
+          "Results summary"
+        );
+
         // Results summary → produced energy, specific yield, PR
         const resultsSection = extractSection(
           fullText,
           "Results summary",
-          "Balances and main results|Loss diagram"
+          "Balances and main results"
         );
 
         const producedEnergyMWh = toNumber(
