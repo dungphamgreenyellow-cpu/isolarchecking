@@ -1,83 +1,55 @@
 // Frontend helper to parse PVSyst PDF via backend and normalize fields
-// Normalized output aligns with ProjectConfirmModal expectations
-// { siteName, gps: {lat, lon}, capacity_dc_kwp, capacity_ac_kw, module_model, inverter_model, tilt_deg, azimuth_deg, soiling_loss_percent, dc_ac_ratio, _raw }
+// New schema aligned with LOOP_PVSYST_FIX parser output
 
 import { getBackendBaseUrl } from "../config";
-// Adding debug logs to trace request and response flow
-import debug from 'debug';
-const log = debug('parsePDFGlobal');
+import debug from "debug";
+const log = debug("parsePDFGlobal");
 
 export async function parsePDFGlobal(file) {
-  log('Preparing to send file to backend for parsing');
-  const backendURL = getBackendBaseUrl();
-  const fd = new FormData();
-  // Backend expects 'pvsystFile' for PVSyst PDF
-  fd.append("pvsystFile", file);
+	log("Preparing to send file to backend for parsing");
+	const backendURL = getBackendBaseUrl();
 
-  try {
-    const res = await fetch(`${backendURL}/analysis/parse-pvsyst`, {
-      method: "POST",
-      body: fd,
-    });
-    log('Received response from backend');
+	const fd = new FormData();
+	fd.append("pvsystFile", file);
 
-    const json = await res.json().catch(() => null);
-    log('Parsed JSON response:', json);
+	try {
+		const res = await fetch(`${backendURL}/analysis/parse-pvsyst`, {
+			method: "POST",
+			body: fd,
+		});
+		log("Received response from backend");
 
-    if (!json?.success) {
-      log('Parsing failed or backend returned an error');
-      return null;
-    }
+		const json = await res.json().catch(() => null);
+		log("Parsed JSON response:", json);
 
-    const d = json.data || {};
-    log('Normalized data:', d);
+		if (!json?.success) {
+			log("Parsing failed or backend returned an error:", json);
+			return null;
+		}
 
-    const lat = d?.gps?.lat ?? d?.latitude ?? null;
-    const lon = d?.gps?.lon ?? d?.longitude ?? null;
-    const capacityDC = d?.capacities?.dc_kWp ?? d?.capacity_dc_kwp ?? null;
-    const capacityAC = d?.capacities?.ac_kW ?? d?.capacity_ac_kw ?? null;
-    const moduleModel = d.moduleModel ?? d.module_model ?? null;
-    const inverterModel = d.inverterModel ?? d.inverter_model ?? null;
+		const d = json.data || {};
+		log("Raw parsed PVSyst data:", d);
 
-    const normalized = {
-      siteName: d.siteName || d.site_name || d.project_name || null,
-      gps: lat != null && lon != null ? { lat, lon } : null,
-      capacity_dc_kwp: capacityDC,
-      capacity_ac_kw: capacityAC,
-      cod_date: d.cod_date || null,
-      codDate: d.cod_date || null,
-      // Backward-compatible keys expected by ProjectConfirmModal
-      capacityDCkWp: capacityDC,
-      capacityACkWac: capacityAC,
-      module_model: moduleModel,
-      inverter_model: inverterModel,
-      pvModuleModel: moduleModel,
-      inverterModel: inverterModel,
-      tilt_deg: d.tilt_deg ?? null,
-      azimuth_deg: d.azimuth_deg ?? null,
-      soiling_loss_percent: d.soiling_loss_percent ?? null,
-      soilingPercent: d.soiling_loss_percent ?? null,
-      dc_ac_ratio: d.dc_ac_ratio ?? null,
-      _raw: d,
-    };
+		const normalized = {
+			reportDate: d.reportDate || null,
+			gps: d.gps || null,
+			systemInfo: d.systemInfo || {},
+			pvArray: d.pvArray || {},
+			expected: d.expected || {},
+			arrayLosses: d.arrayLosses || {},
+			monthly: d.monthly || null,
+			_raw: d,
+		};
 
-    log('Final normalized output:', normalized);
-    return {
-      success: true,
-      systemInfo: {
-        systemPowerDC_kWp: d.capacity_dc_kwp ?? null,
-        systemPowerAC_kW: d.capacity_ac_kw ?? null,
-      },
-      reportDate: d.cod_date || d.codDate || null,
-      pvArray: {
-        moduleModel: d.module_model || null,
-        inverterModel: d.inverter_model || null,
-      },
-      soilingLoss_percent: d.soiling_loss_percent ?? null,
-      gps: d.gps || {},
-    };
-  } catch (e) {
-    log('Error during parsing or backend communication:', e);
-    return null;
-  }
+		log("Final normalized output:", normalized);
+
+		return {
+			success: true,
+			...d,
+			normalized,
+		};
+	} catch (e) {
+		log("Error during parsing or backend communication:", e);
+		return null;
+	}
 }

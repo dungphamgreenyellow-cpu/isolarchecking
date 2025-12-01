@@ -11,6 +11,7 @@ import ProjectConfirmModal from "../components/ProjectConfirmModal";
 import FileCheckModal from "../components/FileCheckModal";
 import { getDefaultValues } from "../hooks/useProjectParser";
 import { getBackendBaseUrl } from "../config";
+import debug from 'debug';
 
 // Backend base URL (ensure correct Render domain fallback)
 const backend = getBackendBaseUrl();
@@ -28,7 +29,11 @@ function inferCountryFromLocation(str = "") {
 
 // (Test buttons removed)
 
+const log = debug('HomePage');
+
 export default function HomePage() {
+  log('HomePage component initialized');
+
   const navigate = useNavigate();
   const [logFile, setLogFile] = useState(null);
   const [pvsystFile, setPvsystFile] = useState(null);
@@ -59,72 +64,42 @@ export default function HomePage() {
   };
 
   const handleStart = () => {
+    log('Start Analysis button clicked');
     if (!logFile) {
+      log('No log file uploaded');
       alert("Please upload your Actual Log File before starting analysis.");
       return;
     }
+    log('Opening FileCheckModal');
     setFileCheckOpen(true);
   };
 
   const handleFileCheckNext = async (parsedData) => {
-    // Unified 3-step reading status and then auto-open Confirm Modal
+    log('FileCheckModal completed with parsed projectMetaV10:', parsedData);
     setFileCheckOpen(false);
     setChecking(true);
     try {
-      // Step 1: Reading log file
-      setProgressMessage("Reading log file…");
-      setProgressValue(10);
-      // Prefer parsedData (provided by FileCheckModal) to avoid double-parse.
-      let computeResult = parsedData?.log || null;
-      if (!computeResult && logFile) {
-        const fd = new FormData();
-        fd.append("logfile", logFile);
-        const res = await fetch(`${backend}/analysis/compute`, { method: "POST", body: fd });
-        const json = await res.json();
-        computeResult = json.success ? json.data : null;
-      }
-      setProgressValue(33);
+      const projectMetaV10 = {
+        siteName: parsedData?.siteName || parsedData?.log?.siteName || "",
+        log: parsedData?.log || null,
+        pvsyst: parsedData?.pvsyst || null,
+        irr: parsedData?.irr || { dailyGHI: null },
+      };
 
-      // Step 2: Reading PVSyst file
-      setProgressMessage("Reading PVSyst file…");
-      setProgressValue(50);
-      let pvsystInfo = parsedData?.pvsyst || null;
-      if (pvsystFile) {
-        // If the FileCheckModal already parsed PVSyst and set projectData, avoid re-parsing
-        if (parsedData?.pvsyst && !pvsystInfo) {
-          pvsystInfo = parsedData.pvsyst;
-        } else {
-          const fd2 = new FormData();
-          fd2.append("pvsystFile", pvsystFile);
-          const res2 = await fetch(`${backend}/analysis/parse-pvsyst`, { method: "POST", body: fd2 });
-          const j2 = await res2.json();
-          if (j2?.success) pvsystInfo = j2.data || j2;
-        }
-      }
-      setProgressValue(66);
+      setProjectData(projectMetaV10);
+      setComputeData(projectMetaV10.log);
 
-      // Step 3: Reading irradiance file (best-effort local status)
-      setProgressMessage("Reading irradiance file…");
-      setProgressValue(80);
-      let irrInfo = null;
-      if (irrFile) {
-        // No dedicated backend endpoint for irradiance in this branch; mark as read
-        irrInfo = { filename: irrFile.name };
-      }
-      setProgressValue(95);
-
-      // Merge results and open Confirm Modal
-      const merged = Object.assign({}, projectData, computeResult || {}, pvsystInfo || {});
-      if (parsedData?.siteName) merged.siteName = parsedData.siteName;
-      setComputeData(computeResult || null);
-      setProjectData(merged);
-      // Build default values for the Confirm Modal and auto-open it
-      const defaults = getDefaultValues({ logData: computeResult || {}, pvsyst: pvsystInfo || {} });
+      const defaults = getDefaultValues({
+        logData: projectMetaV10.log || {},
+        pvsyst: projectMetaV10.pvsyst || {},
+      });
       setDefaultValues(defaults);
       setProgressValue(100);
       setProgressMessage("Done");
+      log('Opening ProjectConfirmModal with projectMetaV10:', projectMetaV10);
       setModalOpen(true);
     } catch (err) {
+      log('Error during file check next step:', err);
       console.error(err);
       setError(err?.message || String(err));
     } finally {
@@ -133,9 +108,15 @@ export default function HomePage() {
   };
 
   async function handleConfirm(confirmForm) {
+    log('ProjectConfirmModal confirmed with data:', confirmForm);
     setModalOpen(false);
     setConfirmData(confirmForm);
     const mergedProjectData = projectData; // already merged from parsedData step
+    log('Navigating to report page with data:', {
+      projectData: mergedProjectData,
+      confirmData: confirmForm,
+      computeData: computeData,
+    });
     navigate("/report", {
       state: {
         projectData: mergedProjectData,
@@ -258,5 +239,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-// (removed unused legacy helper)

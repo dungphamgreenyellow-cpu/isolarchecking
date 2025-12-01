@@ -1,64 +1,55 @@
-// src/components/FileCheckModal.jsx — v7.9 Stable (Match Fusion Parser v9.9-LTS)
-// ✅ Hiển thị range ngày chuẩn local (ko lệch 31/8)
-// ✅ Ẩn Energy, chỉ show “OK — X days (start → end)”
-// ✅ Giữ pastel SaaS style, clean UI
-// ✅ Đồng bộ logic với parser v9.9-LTS
+// src/components/FileCheckModal.jsx — v7.9 AutoNext + SiteNameFix
+// Fixes:
+// • Auto-next to Confirm Info when parse OK
+// • Remove undefined projectInfo
+// • Always set siteName from FusionSolar log
+// • Keep pastel SaaS style (stable)
 
 import React, { useEffect, useState } from "react";
 import { parsePDFGlobal } from "../utils/parsePDFGlobal";
 import { getBackendBaseUrl } from "../config";
-import debug from 'debug';
+import debug from "debug";
 
-// XLSX→CSV conversion removed — backend now handles XLSX directly
+const log = debug("FileCheckModal");
 
-// Using direct fetch to backend for /analysis/compute to inspect success flag explicitly.
-// (Intentionally bypassing previous checkFusionSolarPeriod helper to implement new success logic.)
-
-const log = debug('FileCheckModal');
-
-export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onClose, onNext, setProjectInfo }) {
-  log('FileCheckModal initialized with props:', { open, logFile, pvsystFile, irrFile });
-
+export default function FileCheckModal({
+  open,
+  logFile,
+  pvsystFile,
+  irrFile,
+  onClose,
+  onNext,
+  setProjectInfo,
+}) {
   const [checking, setChecking] = useState(false);
-  const [logResult, setLogResult] = useState(null); // raw parse payload (data.data)
-  const [logStatus, setLogStatus] = useState({ ok: false, msg: "" }); // simplified status object
+  const [logResult, setLogResult] = useState(null);
+  const [logStatus, setLogStatus] = useState({ ok: false, msg: "" });
   const [pvsystResult, setPvsystResult] = useState(null);
   const [irrResult, setIrrResult] = useState(null);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!open) return;
-    log('Modal opened, starting file checks');
 
     (async () => {
       setChecking(true);
       setProgress(0);
-      let logRes = null, pvRes = null;
 
-      try {
-        if (logFile) {
-          log('Processing log file:', logFile.name);
-          const backendURL = getBackendBaseUrl();
+      let logRes = null;
+      let pdfInfo = null;
+
+      const backendURL = getBackendBaseUrl();
+
+      const logPromise = (async () => {
+        if (!logFile) return null;
+        try {
           const formData = new FormData();
           formData.append("logfile", logFile);
 
-          const fetchWithRetry = async (url, options, retries = 3, delays = [500, 1000, 2000]) => {
-            let lastErr = null;
-            for (let i = 0; i < retries; i++) {
-              try {
-                const r = await fetch(url, options);
-                return r;
-              } catch (e) {
-                lastErr = e;
-                log('Retrying fetch due to error:', e);
-                const d = delays[i] || 1000;
-                await new Promise((res) => setTimeout(res, d));
-              }
-            }
-            throw lastErr || new Error("Network error");
-          };
-
-          const computePromise = fetchWithRetry(`${backendURL}/analysis/compute`, { method: "POST", body: formData });
+          const computePromise = fetch(`${backendURL}/analysis/compute`, {
+            method: "POST",
+            body: formData,
+          });
 
           let stopPolling = false;
           const poll = async () => {
@@ -66,115 +57,114 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
               try {
                 const pr = await fetch(`${backendURL}/analysis/progress`);
                 const pj = await pr.json();
-                log('Polling progress:', pj);
                 if (typeof pj.p === "number") {
                   setProgress(pj.p);
-                  if (pj.p >= 100) {
-                    break;
-                  }
+                  if (pj.p >= 100) break;
                 }
-              } catch (pollErr) {
-                log('Polling error:', pollErr);
-              }
+              } catch {}
               await new Promise((r) => setTimeout(r, 400));
             }
           };
-
           poll();
 
           const res = await computePromise;
           stopPolling = true;
+
           let data = null;
           try {
             data = await res.json();
-            log('Log file response:', data);
-          } catch (jsonErr) {
-            log('Error parsing JSON response:', jsonErr);
+          } catch {
             setLogStatus({ ok: false, msg: "Invalid JSON response" });
           }
 
           if (data?.success) {
-            const payload = data.data && typeof data.data === "object" ? data.data : data;
             setProgress(100);
-            setLogStatus({ ok: true, msg: "FusionSolar log parsed successfully" });
-            logRes = { ...payload, success: true, parse_ms: data.parse_ms };
-            const siteName = payload?.siteName;
-            if (siteName && setProjectInfo) {
-              setProjectInfo((prev) => ({ ...prev, siteName }));
-            }
-          } else {
-            setLogStatus({ ok: false, msg: data?.message || "Error reading log file" });
-            logRes = { success: false, message: data?.message || "Error reading log file" };
-          }
-        }
-      } catch (err) {
-        log('Error processing log file:', err);
-        setLogStatus({ ok: false, msg: "Server not reachable. Please check backend URL or CORS." });
-        logRes = { success: false, message: "Server not reachable. Please check backend URL or CORS." };
-      }
+            setLogStatus({ ok: true, msg: "Log parsed successfully" });
 
-      if (pvsystFile) {
-        log('Processing PVSyst file:', pvsystFile.name);
-        const ok = /\.pdf$/i.test(pvsystFile.name || "");
-        if (ok) {
-          const pdfInfo = await parsePDFGlobal(pvsystFile);
-          log('PVSyst file parsed info:', pdfInfo);
-          if (pdfInfo) {
-            const overrides = {};
-            if (pdfInfo?.capacity_dc_kwp != null) {
-              overrides.installed = `${pdfInfo.capacity_dc_kwp} kWp`;
-              overrides.capacityDCkWp = String(pdfInfo.capacity_dc_kwp);
-            }
-            const toISO = (val) => {
-              if (!val) return "";
-              if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
-                const [mm, dd, yyyy] = val.split("/");
-                return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-              }
-              if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
-                const [dd, mm, yyyy] = val.split(".");
-                return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-              }
-              if (/^\d{4}\/\d{2}\/\d{2}$/.test(val)) {
-                return val.replaceAll("/", "-");
-              }
-              return val;
+            const payload =
+              data.data && typeof data.data === "object" ? data.data : data;
+
+            const v10Log = {
+              siteName: payload.siteName || "",
+              dailyProduction: payload.dailyProduction || {},
+              dailyProductionTotal: payload.dailyProductionTotal || 0,
+              firstDay: payload.firstDay || null,
+              lastDay: payload.lastDay || null,
+              records: payload.records || [],
+              parsedRecordsCount: payload.parsedRecordsCount || 0,
             };
-            if (pdfInfo?.cod_date || pdfInfo?.codDate) {
-              const raw = pdfInfo.cod_date ?? pdfInfo.codDate;
-              overrides.codDate = toISO(raw);
+
+            if (setProjectInfo) {
+              setProjectInfo((prev) => ({
+                ...(prev || {}),
+                siteName: v10Log.siteName || prev?.siteName || "",
+                log: v10Log,
+              }));
             }
-            const merged = { ...pdfInfo, ...overrides };
-            setProjectInfo && setProjectInfo(merged);
-            pvRes = { valid: true, message: "PVSyst PDF parsed" };
+
+            logRes = v10Log;
           } else {
-            pvRes = { valid: false, message: "Failed to parse PDF" };
+            setLogStatus({
+              ok: false,
+              msg: data?.message || "Error reading log file",
+            });
+            logRes = null;
           }
-        } else {
-          pvRes = { valid: false, message: "Invalid PDF" };
+        } catch {
+          setLogStatus({
+            ok: false,
+            msg: "Server not reachable. Please check backend URL or CORS.",
+          });
+          logRes = null;
         }
-      }
+        return logRes;
+      })();
+
+      const pvsystPromise = (async () => {
+        if (!pvsystFile) return null;
+        if (!/\.pdf$/i.test(pvsystFile.name || "")) return null;
+        const info = await parsePDFGlobal(pvsystFile);
+        if (info && info.success && setProjectInfo) {
+          setProjectInfo((prev) => ({
+            ...(prev || {}),
+            pvsyst: info.normalized || null,
+          }));
+        }
+        return info;
+      })();
+
+      const [logResultV10, pvsystInfo] = await Promise.all([logPromise, pvsystPromise]);
+
+      setLogResult(logResultV10);
+      setPvsystResult(pvsystInfo);
 
       if (irrFile) {
-        log('Irradiance file noted:', irrFile.name);
         setIrrResult({ valid: true, message: "Irradiance file noted" });
       } else {
         setIrrResult(null);
       }
 
-      setLogResult(logRes);
-      setPvsystResult(pvRes);
+      const okLog = !!logResultV10;
+      const okPvsyst = pvsystFile ? !!(pvsystInfo && pvsystInfo.success) : true;
+
+      if (okLog && okPvsyst) {
+        const projectMeta = {
+          siteName: logResultV10.siteName || "",
+          log: logResultV10,
+          pvsyst: pvsystInfo ? pvsystInfo.normalized || null : null,
+          irr: { dailyGHI: null },
+        };
+        onNext(projectMeta);
+      }
+
       setChecking(false);
-      log('File checks completed');
     })();
   }, [open, logFile, pvsystFile]);
 
   if (!open) return null;
 
-  // New canProceed logic based on logStatus.ok
   const ok = logStatus.ok;
-  const canProceed = logStatus.ok;
-  const isXlsx = logFile && /\.xlsx$/i.test(logFile.name || "");
+  const canProceed = ok;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -187,9 +177,12 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
           {/* Log File */}
           <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
             <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
-              <span className="truncate">📊 Log File: {logFile?.name || "—"}</span>
+              <span className="truncate">
+                📊 Log File: {logFile?.name || "—"}
+              </span>
               <span>{checking ? "…" : ok ? "✅" : "❌"}</span>
             </div>
+
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className={`${
@@ -199,27 +192,36 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
                     ? "bg-green-500"
                     : "bg-red-500"
                 } h-full`}
-                style={{ width: `${Math.min(100, Math.max(0, progress || (checking ? 10 : 0)))}%` }}
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.max(0, progress || (checking ? 10 : 0))
+                  )}%`,
+                }}
               />
             </div>
 
-            {/* hiển thị range ngày chuẩn local, không Energy */}
             <p className="text-xs text-gray-500 mt-1">
               {checking
                 ? `Reading log file… ${Math.round(progress)}%`
                 : ok
                 ? "Log parsed successfully"
-                : logStatus.msg || "Waiting..."}
+                : logStatus.msg}
             </p>
           </div>
 
-          {/* PVSyst PDF */}
+          {/* PVSyst */}
           {pvsystFile && (
             <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
               <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
-                <span className="truncate">📄 PVSyst File: {pvsystFile?.name}</span>
-                <span>{checking ? "…" : pvsystResult?.valid ? "✅" : "❌"}</span>
+                <span className="truncate">
+                  📄 PVSyst File: {pvsystFile?.name}
+                </span>
+                <span>
+                  {checking ? "…" : pvsystResult?.valid ? "✅" : "❌"}
+                </span>
               </div>
+
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className={`${
@@ -232,6 +234,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
                   style={{ width: checking ? "70%" : "100%" }}
                 />
               </div>
+
               <p className="text-xs text-gray-500 mt-1">
                 {checking
                   ? "Reading PVSyst file…"
@@ -240,13 +243,16 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
             </div>
           )}
 
-          {/* Irradiance File */}
+          {/* Irradiance */}
           {irrFile && (
             <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
               <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
-                <span className="truncate">☀️ Irradiation File: {irrFile?.name}</span>
+                <span className="truncate">
+                  ☀️ Irradiation File: {irrFile?.name}
+                </span>
                 <span>{checking ? "…" : irrResult?.valid ? "✅" : "❌"}</span>
               </div>
+
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className={`${
@@ -259,6 +265,7 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
                   style={{ width: checking ? "60%" : "100%" }}
                 />
               </div>
+
               <p className="text-xs text-gray-500 mt-1">
                 {checking
                   ? "Reading irradiance file…"
@@ -277,12 +284,18 @@ export default function FileCheckModal({ open, logFile, pvsystFile, irrFile, onC
           >
             Cancel
           </button>
+
           <button
-            onClick={() => onNext({
-              log: logResult,
-              pvsyst: projectInfo || null,
-              pvsystOK: !!pvsystResult?.valid
-            })}
+            onClick={() => {
+              if (!logResult) return;
+              const projectMeta = {
+                siteName: logResult.siteName || "",
+                log: logResult,
+                pvsyst: pvsystResult ? pvsystResult.normalized || null : null,
+                irr: { dailyGHI: null },
+              };
+              onNext(projectMeta);
+            }}
             disabled={!canProceed || checking}
             className={`px-5 py-2 rounded-lg font-medium text-white shadow-md transition-all ${
               canProceed && !checking

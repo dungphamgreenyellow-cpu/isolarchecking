@@ -5,7 +5,6 @@ import { parse } from "csv-parse";
 function normalizeDate(raw) {
   if (!raw) return null;
 
-  // Excel numeric date
   const num = Number(raw);
   if (Number.isFinite(num) && num > 20000 && num < 90000) {
     const origin = new Date(1899, 11, 30);
@@ -35,6 +34,19 @@ function normalizeInverter(v) {
   return cleaned ? `INV-${cleaned}` : null;
 }
 
+function normalizeTimestamp(raw) {
+  if (!raw) return null;
+  const dt = new Date(raw);
+  if (isNaN(dt)) return null;
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  const hh = String(dt.getHours()).padStart(2, "0");
+  const mm = String(dt.getMinutes()).padStart(2, "0");
+  const ss = String(dt.getSeconds()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+}
+
 export async function streamParseAndCompute(buffer) {
   let headers = null;
   let headerRowIndex = -1;
@@ -42,10 +54,12 @@ export async function streamParseAndCompute(buffer) {
   let startCol = -1;
   let yieldCol = -1;
   let invCol = -1;
+  let irrCol = -1;
   let siteCol = -1;
   let siteName = null;
   let parsedRecordsCount = 0;
   const invDayMap = {};
+  const records = [];
 
   await new Promise((resolve, reject) => {
     const input = Readable.from(buffer);
@@ -75,6 +89,7 @@ export async function streamParseAndCompute(buffer) {
           if (/start\s*time/.test(t)) startCol = i;
           if (/total\s*yield/.test(t)) yieldCol = i;
           if (/manageobject|device name|inverter/.test(t)) invCol = i;
+          if (/(irradiance|ghi|gti|solar)/.test(t)) irrCol = i;
           if (t.includes("site name")) siteCol = i;
         });
       }
@@ -83,10 +98,13 @@ export async function streamParseAndCompute(buffer) {
         const rawT = cells[startCol];
         const rawE = cells[yieldCol];
         const rawInv = cells[invCol];
+        const rawIrr = irrCol !== -1 ? cells[irrCol] : "";
+
         if (siteName == null && siteCol !== -1) {
           const sn = cells[siteCol];
           if (sn) siteName = sn;
         }
+
         const day = normalizeDate(rawT);
         if (!day || !rawInv || !rawE) { rowIndex++; return; }
         const inv = normalizeInverter(rawInv);
@@ -95,6 +113,7 @@ export async function streamParseAndCompute(buffer) {
         if (/^(na|null|undefined)$/i.test(numStr) || numStr === "") { rowIndex++; return; }
         const eac = Number(numStr);
         if (!Number.isFinite(eac)) { rowIndex++; return; }
+
         if (!invDayMap[day]) invDayMap[day] = {};
         if (!invDayMap[day][inv]) invDayMap[day][inv] = { min: eac, max: eac };
         else {
@@ -102,6 +121,20 @@ export async function streamParseAndCompute(buffer) {
           invDayMap[day][inv].max = Math.max(invDayMap[day][inv].max, eac);
         }
         parsedRecordsCount++;
+
+        const ts = normalizeTimestamp(rawT);
+        const activePower = null;
+        let irr = null;
+        if (rawIrr && !/^(na|null|undefined)$/i.test(rawIrr)) {
+          const irrNum = Number(String(rawIrr).replace(/[\,\s]/g, ""));
+          if (Number.isFinite(irrNum)) irr = irrNum;
+        }
+        records.push({
+          timestamp: ts,
+          inverter: inv,
+          activePower,
+          irradiance: irr,
+        });
       }
 
       rowIndex++;
@@ -131,6 +164,7 @@ export async function streamParseAndCompute(buffer) {
     firstDay: keys[0] || null,
     lastDay: keys[keys.length - 1] || null,
     parsedRecordsCount,
+    records,
   };
 }
 

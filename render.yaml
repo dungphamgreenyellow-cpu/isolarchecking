@@ -3,9 +3,7 @@ services:
     name: isolarchecking-backend
     env: node
     rootDir: backend
-    buildCommand: |
-      pip install -r requirements.txt
-      yarn install
+    buildCommand: yarn install
     startCommand: node index.js
     envVars:
       - key: NODE_VERSION
@@ -15,5 +13,5 @@ services:
     name: isolarchecking-frontend
     env: static
     rootDir: frontend
-    buildCommand: yarn build
+    buildCommand: yarn install && yarn build
     staticPublishPath: dist

@@ -29,11 +29,7 @@ const backend = getBackendBaseUrl();
 
 export default function Report() {
   const location = useLocation();
-  const { projectData, confirmData, computeData } = location.state || {};
-  const files = (location.state && location.state.files) || {};
-  const rprData = (location.state && (location.state.rpr || location.state.realpr)) || null;
-  const logFile = files?.logFile || null;
-  const irrFile = files?.irrFile || null;
+  const { projectData, confirmData } = location.state || {};
 
   const [realPR, setRealPR] = React.useState("—");
   const [dailyRPR, setDailyRPR] = React.useState([]);
@@ -47,38 +43,28 @@ export default function Report() {
       <div className="text-center mt-20 text-gray-500">No project data found. Please go back and analyze again.</div>
     );
 
-  const state = location.state || {};
   const proj = projectData || confirmData || {};
-  const {
-    siteName,
-    gps, // new explicit GPS string (formatted "lat°, long°")
-    pvModel,
-    inverterModel,
-    firstDay,
-    lastDay,
-    location: legacyLocation, // backward compatibility
-    installed,
-    module,
-    inverter,
-    cod,
-    actualProduction,
-    irradiation: uploadedIrr,
-    days,
-    gpsCountry,
-  } = proj;
+  const log = projectData?.log || null;
+  const irr = projectData?.irr || { dailyGHI: null };
+  const pvsyst = projectData?.pvsyst || {};
+
+  const siteName = projectData?.siteName || "—";
+  const days = log ? Object.keys(log.dailyProduction || {}).length : 0;
+  const gpsCountry = proj.gpsCountry;
+  const actualProduction = log?.dailyProductionTotal || 0;
 
   React.useEffect(() => {
     (async () => {
       try {
-        const parse = state?.parse || state?.projectData?.parse || state?.computeData?.parse || null;
+        const parse = log || null;
         let month = new Date().getMonth() + 1;
-        let reportDays = days || computeData?.days || 15;
-        if (parse && parse.startDate) {
-          month = new Date(parse.startDate).getMonth() + 1;
+        let reportDays = days || 15;
+        if (parse && parse.firstDay && parse.lastDay) {
+          month = new Date(parse.firstDay).getMonth() + 1;
           reportDays = Object.keys(parse.dailyProduction || {}).length || reportDays;
-          setPeriodText(fmtMonthRange(parse.startDate, parse.endDate));
+          setPeriodText(fmtMonthRange(parse.firstDay, parse.lastDay));
         }
-        const baselineGHI = getMonthlyGHI(gpsCountry || computeData?.gpsCountry || "Vietnam", month) / 30;
+        const baselineGHI = getMonthlyGHI(gpsCountry || "Vietnam", month) / 30;
         setTotalIrr(Math.round(baselineGHI * reportDays));
         setGeneratedText(formatDateDisplay(new Date()));
       } catch (err) {
@@ -89,14 +75,14 @@ export default function Report() {
   }, [state, logFile]);
 
   const now = new Date();
-  const country = gpsCountry || computeData?.gpsCountry || "Vietnam";
+  const country = gpsCountry || "Vietnam";
   const monthNow = now.getMonth() + 1;
   const baselineGHI = getMonthlyGHI(country, monthNow) / 30;
-  const reportDays = days || computeData?.days || 15;
+  const reportDays = days || 15;
   const actualProd = Number(actualProduction) || 0;
   const capKWp = Number(String((confirmData?.installedCapacity != null ? `${confirmData.installedCapacity}` : installed) || "").replace(/[^\d.]/g, "")) || 0;
-  const irr = Number(totalIrr) || 0;
-  const rprRef = capKWp > 0 && irr > 0 ? ((actualProd / (capKWp * irr)) * 100).toFixed(2) : "0.00";
+  const totalIrrNumber = Number(totalIrr) || 0;
+  const rprRef = capKWp > 0 && totalIrrNumber > 0 ? ((actualProd / (capKWp * totalIrrNumber)) * 100).toFixed(2) : "0.00";
 
   React.useEffect(() => {
     if (rprData && typeof rprData === "object") {
@@ -105,7 +91,7 @@ export default function Report() {
       return;
     }
     (async () => {
-      const parse = state?.parse || state?.projectData?.parse || state?.computeData?.parse || null;
+      const parse = log || null;
       if (!parse || !capKWp) {
         setRealPR(rprRef);
         setDailyRPR([]);
@@ -113,8 +99,7 @@ export default function Report() {
       }
       try {
         setLoadingPR(true);
-        const irradiance = projectData?.irradiation || null;
-        const payload = { records: parse.records, capacity: capKWp, irradiance: irradiance || null };
+        const payload = { records: parse.records, capacity: capKWp, irradiance: irr.dailyGHI || null };
         const r = await fetch(`${backend}/analysis/realpr`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const json = await r.json();
         if (!json?.success) {
@@ -134,7 +119,7 @@ export default function Report() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, capKWp, rprData]);
+  }, [log, capKWp, rprData]);
 
   const getFontSizeForInverter = (text = "") => {
     const len = text.length;
@@ -155,18 +140,7 @@ export default function Report() {
   return (
     <div className="w-full flex justify-center bg-[#f6f9ff] px-4 py-6">
       <div className="w-full max-w-[794px] mx-auto">
-        <ReportHeader
-          data={{
-            ...projectData,
-            firstDay: projectData?.firstDay || computeData?.firstDay,
-            lastDay: projectData?.lastDay || computeData?.lastDay,
-            siteName:
-              projectData?.siteName ||
-              computeData?.siteName ||
-              rprData?.siteName ||
-              proj?.siteName,
-          }}
-        />
+        <ReportHeader data={projectData || {}} />
         {/* PROJECT INFO removed as requested */}
       {/* SUMMARY & CHART */}
       <div className="w-full bg-[#F9FBFF] rounded-none shadow p-6 mb-6 mt-6">
@@ -203,7 +177,7 @@ export default function Report() {
             </ResponsiveContainer>
           </div>
         </div>
-        {!irrFile && <p className="text-left text-gray-500 italic text-xs mt-3 ml-1">No irradiation file uploaded — using monthly baseline for reference.</p>}
+        {!irr?.dailyGHI && <p className="text-left text-gray-500 italic text-xs mt-3 ml-1">No irradiation file uploaded — using monthly baseline for reference.</p>}
       </div>
 
       {rprData !== null && (
