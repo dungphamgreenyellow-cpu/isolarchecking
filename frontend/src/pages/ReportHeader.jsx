@@ -12,28 +12,13 @@ export default function ReportHeader({ data = {}, reportDate }) {
 	const systemInfo = pvsyst.systemInfo || {};
 	const pvArray = pvsyst.pvArray || {};
 
-	// Capacity (DC)
-	const capacityValue =
-		systemInfo.systemPowerDC_kWp ??
-		systemInfo.systemPowerDCkWp ??
-		data.capacityDCkWp ??
-		data.capacity_dc_kwp ??
-		data.installedCapacityKw ??
-		null;
+	// Capacity (DC) from new PVSyst schema
 	const installedCapacity =
-		capacityValue != null ? `${capacityValue} kWp` : "—";
+		pvsyst.dcSizeKWp ? `${pvsyst.dcSizeKWp} kWp` : "—";
 
-	// PV / INV models
-	const moduleModel =
-		pvArray.moduleModel ||
-		data.module_model ||
-		data.pvModuleModel ||
-		"—";
-	const inverterModel =
-		pvArray.inverterModel ||
-		data.inverter_model ||
-		data.inverterModel ||
-		"—";
+	// PV / INV models from new PVSyst schema
+	const moduleModel = pvsyst.moduleModel || "—";
+	const inverterModel = pvsyst.inverterModel || "—";
 	const pvInvBox = `${moduleModel} / ${inverterModel}`;
 
 	// COD / report date

@@ -47,8 +47,7 @@ export default function ProjectConfirmModal({ open, initialData = {}, defaultVal
             <input
               className="mt-1 w-full rounded-xl px-3 py-2 bg-gray-100 text-gray-700"
               value={form.siteName || ""}
-              onChange={() => {}}
-              readOnly
+              onChange={change("siteName")}
             />
           </label>
           <label className="text-sm">

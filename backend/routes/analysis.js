@@ -158,40 +158,23 @@ router.post("/merge", async (req, res) => {
 
     const siteName =
       (logData && logData.siteName && logData.siteName.trim()) ||
-      (pvsystData && pvsystData.siteName && pvsystData.siteName.trim()) ||
       "Unknown Site";
 
-    const gps =
-      (pvsystData && pvsystData.gps) || (logData && logData.gps) || null;
+    const gps = (pvsystData && pvsystData.gps) || null;
 
-    const installed =
-      (pvsystData && pvsystData.installedCapacity) ||
-      (logData && logData.installedCapacity) ||
-      null;
+    const installed = pvsystData && pvsystData.dcSizeKWp
+      ? pvsystData.dcSizeKWp
+      : null;
 
-    const moduleModel =
-      (pvsystData && pvsystData.moduleModel) ||
-      (pvsystData && pvsystData.pvArray && pvsystData.pvArray.moduleModel) ||
-      null;
+    const moduleModel = (pvsystData && pvsystData.moduleModel) || null;
 
-    const inverterModel =
-      (pvsystData && pvsystData.inverterModel) ||
-      (pvsystData &&
-        pvsystData.pvArray &&
-        pvsystData.pvArray.inverterModel) ||
-      null;
+    const inverterModel = (pvsystData && pvsystData.inverterModel) || null;
 
     const expectedEnergy =
-      (pvsystData && pvsystData.expectedEnergy) ||
-      (pvsystData &&
-        pvsystData.expected &&
-        pvsystData.expected.producedEnergy_MWh) ||
+      (pvsystData && pvsystData.producedEnergyMWh) ||
       null;
 
-    const codDate =
-      (pvsystData && pvsystData.codDate) ||
-      (logData && logData.firstDay) ||
-      null;
+    const codDate = (logData && logData.firstDay) || null;
 
     const merged = {
       siteName,
