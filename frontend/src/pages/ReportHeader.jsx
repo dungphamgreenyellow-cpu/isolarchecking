@@ -6,15 +6,14 @@ export default function ReportHeader({ data = {}, reportDate }) {
 	const repDay = reportDate || generatedAt;
 
 	// projectMetaV10: { siteName, log, pvsyst, irr }
-	const siteName = data.siteName || "—";
+	const siteName = data.siteName || data.log?.siteName || "—";
 	const log = data.log || {};
 	const pvsyst = data.pvsyst || {};
 	const systemInfo = pvsyst.systemInfo || {};
 	const pvArray = pvsyst.pvArray || {};
 
 	// Capacity (DC) from new PVSyst schema
-	const installedCapacity =
-		pvsyst.dcSizeKWp ? `${pvsyst.dcSizeKWp} kWp` : "—";
+	const installedCapacity = pvsyst.dcSizeKWp ? `${pvsyst.dcSizeKWp} kWp` : "—";
 
 	// PV / INV models from new PVSyst schema
 	const moduleModel = pvsyst.moduleModel || "—";
@@ -22,13 +21,7 @@ export default function ReportHeader({ data = {}, reportDate }) {
 	const pvInvBox = `${moduleModel} / ${inverterModel}`;
 
 	// COD / report date
-	const codRaw =
-		pvsyst.reportDate ||
-		data.codDate ||
-		data.cod ||
-		data.cod_date ||
-		data.reportDate ||
-		null;
+	const codRaw = data.codDate || pvsyst.reportDate || null;
 	const codDate = codRaw ? normalizeDateString(codRaw) : "—";
 
 	// GPS

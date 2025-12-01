@@ -33,12 +33,17 @@ export async function parsePDFGlobal(file) {
 		const normalized = {
 			reportDate: d.reportDate || null,
 			gps: d.gps || null,
-			systemInfo: d.systemInfo || {},
-			pvArray: d.pvArray || {},
-			expected: d.expected || {},
-			arrayLosses: d.arrayLosses || {},
+			dcSizeKWp: d.dcSizeKWp || null,
+			acSizeKW: d.acSizeKW || null,
+			moduleModel: d.moduleModel || null,
+			moduleCount: d.moduleCount || null,
+			inverterModel: d.inverterModel || null,
+			inverterCount: d.inverterCount || null,
+			producedEnergyMWh: d.producedEnergyMWh || null,
+			specificYield: d.specificYield || null,
+			performanceRatio: d.performanceRatio || null,
 			monthly: d.monthly || null,
-			_raw: d,
+			losses: d.losses || null,
 		};
 
 		log("Final normalized output:", normalized);

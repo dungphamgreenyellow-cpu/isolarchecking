@@ -105,6 +105,10 @@ export default function HomePage() {
 
       const projectMetaV10 = mergeResp.data.data || {};
 
+      if (logData?.siteName) {
+        projectMetaV10.siteName = logData.siteName;
+      }
+
       // Ensure irr always present
       if (!projectMetaV10.irr) {
         projectMetaV10.irr = { dailyGHI: null };
